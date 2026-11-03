@@ -564,26 +564,26 @@ function render() {
   if (firstTick !== zMin && yProfBot - yz(firstTick) > 18)
     o.push(`<text x="${left - 5}" y="${yProfBot + 2}" text-anchor="end" font-size="${mobile ? 10.5 : 13}" fill="#333">${zMin.toLocaleString("de-DE")}</text>`);
 
+  // Raster der Windpfeile – die Wolkenfelder nutzen dasselbe Raster
+  const span = zMax - zMin;
+  const step = [50, 100, 150, 200, 250, 300, 500].find(s => s / span * profH >= (mobile ? 19 : 24)) || 500;
+  const levelsFor = r => { const a = []; for (let z = Math.ceil((r.ground + 30) / step) * step; z <= zMax - step * 0.4; z += step) if (z >= zMin) a.push(z); return a; };
+
   // Profilspalten: Hintergrund, Wolkendichte nach Höhe
   hrs.forEach((r, i) => {
     const x = left + i * colW + 2, w = colW - 4;
     o.push(`<rect x="${x}" y="${yProfTop}" width="${w}" height="${profH}" rx="5" fill="#ffffff" stroke="#ececec" stroke-width="0.6"/>`);
     if (r.ground > zMin) o.push(`<rect x="${x}" y="${yz(r.ground)}" width="${w}" height="${yProfBot - yz(r.ground)}" fill="url(#hatch)"/>`);
-    // Wolken in Achteln; gleiche Achtel übereinander werden zu einem Block zusammengefasst
-    const zs = Math.max(zMin, r.ground);
-    let blk = null;
-    const flush = () => {
-      if (!blk || !blk.o) return;
-      const g = octaGray(blk.o), y1 = yz(blk.z1), y0 = yz(blk.z0);
-      o.push(`<rect x="${x}" y="${y1}" width="${w}" height="${y0 - y1 + 0.4}" fill="rgb(${g},${g},${g})" class="hit" data-k="c" data-i="${i}" data-z0="${blk.z0}" data-z1="${blk.z1}" data-o="${blk.o}"/>`);
-    };
-    for (let z = zs; z < zMax; z += 50) {
-      const pz = prof(r, z + 25); if (!pz) continue;
-      const ok = octas(pz.cc), z1 = Math.min(z + 50, zMax);
-      if (blk && blk.o === ok) { blk.z1 = z1; continue; }
-      flush(); blk = { o: ok, z0: z, z1 };
-    }
-    flush();
+    // Wolken in Achteln: ein Feld je Windpfeil-Höhe (Mitte = Pfeilhöhe, Grenzen = halber Abstand)
+    const lv = levelsFor(r);
+    lv.forEach((z, k) => {
+      const z0 = k === 0 ? Math.max(zMin, r.ground) : z - step / 2;
+      const z1 = k === lv.length - 1 ? zMax : z + step / 2;
+      const pz = prof(r, z); if (!pz) return;
+      const ok = octas(pz.cc); if (!ok) return;
+      const g = octaGray(ok), y1 = yz(z1), y0 = yz(z0);
+      o.push(`<rect x="${x}" y="${y1}" width="${w}" height="${Math.max(1, y0 - y1 - 0.7)}" fill="rgb(${g},${g},${g})" class="hit" data-k="c" data-i="${i}" data-z0="${Math.round(z0)}" data-z1="${Math.round(z1)}" data-o="${ok}"/>`);
+    });
   });
 
   // Startplatzhöhe
@@ -594,12 +594,9 @@ function render() {
   }
 
   // Windpfeile im Profil
-  const span = zMax - zMin;
-  const step = [50, 100, 150, 200, 250, 300, 500].find(s => s / span * profH >= (mobile ? 19 : 24)) || 500;
   const aSize = Math.min(mobile ? 19 : 27, colW * 0.75);
   hrs.forEach((r, i) => {
-    for (let z = Math.ceil((r.ground + 30) / step) * step; z <= zMax - step * 0.4; z += step) {
-      if (z < zMin) continue;
+    for (const z of levelsFor(r)) {
       const p = prof(r, z); if (!p) continue;
       const f = windColor(p.ws), gc = gustColor(gustAt(r, z, p.ws));
       o.push(arrowSvg(cx(i), yz(z), p.ws, p.wd, aSize, f, gc === f ? darker(f) : gc, gc === f ? 1.2 : 2, `class="hit" data-k="p" data-i="${i}" data-z="${z}"`));
