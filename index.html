@@ -106,7 +106,8 @@ const CONFIG = {
   windSteps: [12, 20, 30, 38],
   gustSteps: [25, 35, 40, 45],
   colors: ["#2fc42f", "#ffe100", "#ff8a00", "#d40000", "#111111"],
-  ueberhitzung: 1.0,       // K, Auslöseüberhitzung für die Thermikberechnung
+  ueberhitzung: 1.5,       // K, Auslöseüberhitzung bei voller Einstrahlung (radFull)
+  radFull: 600,            // W/m², ab dieser Globalstrahlung volle Überhitzung; ohne Sonne keine
   hollowBelow: 4,          // km/h, darunter Pfeil nur umrandet
   pressureLevels: [1000, 975, 950, 925, 900, 850, 800, 700, 600, 500],
   modelsD2: ["icon_d2", "dwd_icon_d2"],   // erster gültiger Name wird verwendet
@@ -114,7 +115,8 @@ const CONFIG = {
   modelsGL: ["icon_global", "dwd_icon_global"],
   days: 7,
   gustDecay: 600,          // m über Thermikobergrenze, in denen der Böenanteil auf 0 abnimmt
-  gustMinFactor: 1.1,      // Böen mindestens Wind × Faktor
+  gustMinFactor: 1.3,      // Böenfaktor oberhalb der durchmischten Schicht
+  gustFactorMax: 1.7,      // größter Böenfaktor (Böe ÷ Wind)
 };
 
 /* ===================== URL-Parameter ===================== */
@@ -173,7 +175,7 @@ function civilTwilight(y, m, d, lat, lon) {
 /* ===================== Daten holen ===================== */
 const SURF = ["temperature_2m","dew_point_2m","relative_humidity_2m","precipitation","weather_code",
   "cloud_cover_low","cloud_cover_mid","cloud_cover_high","wind_speed_10m","wind_direction_10m",
-  "wind_gusts_10m","surface_pressure","is_day"];
+  "wind_gusts_10m","surface_pressure","is_day","shortwave_radiation"];
 const PLV = ["temperature","relative_humidity","cloud_cover","wind_speed","wind_direction","geopotential_height"];
 
 function apiUrl(model) {
@@ -218,7 +220,7 @@ function makeDemo(model) {
     const rain = day === 1 && h >= 13 && h <= 17 ? 0.2 + 0.25 * (h - 12) : 0;
     const ccLowBase = h < 9 ? 70 - h * 6 : 5;
     put("temperature_2m", T2); put("dew_point_2m", T2 - spread); put("relative_humidity_2m", clamp(100 - spread * 6, 30, 100));
-    put("precipitation", rain); put("is_day", h >= 7 && h <= 16 ? 1 : 0);
+    put("precipitation", rain); put("is_day", h >= 7 && h <= 16 ? 1 : 0); put("shortwave_radiation", 650 * sun * (rain ? 0.3 : 1));
     put("wind_speed_10m", 4 + 6 * sun + day * 3); put("wind_direction_10m", 20 + 30 * sun);
     put("wind_gusts_10m", (4 + 6 * sun + day * 3) * 1.9); put("surface_pressure", 1013.25 * Math.pow(1 - ground / 44330, 5.255));
     const ccMid = day === 1 ? clamp((h - 9) * 15, 0, 90) : (day === 2 ? 40 : 10);
@@ -261,7 +263,8 @@ function buildRecords(chain) {
     const rec = { time: t, date: t.slice(0, 10), hour: +t.slice(11, 13), model, ground,
       T2: g("temperature_2m"), Td2: g("dew_point_2m"), RH2: g("relative_humidity_2m"), precip: g("precipitation") || 0,
       code: g("weather_code"), isDay: g("is_day"), ccL: g("cloud_cover_low"), ccM: g("cloud_cover_mid"), ccH: g("cloud_cover_high"),
-      ws10: g("wind_speed_10m"), wd10: g("wind_direction_10m"), gust10: g("wind_gusts_10m"), ps: g("surface_pressure"), levels: [] };
+      ws10: g("wind_speed_10m"), wd10: g("wind_direction_10m"), gust10: g("wind_gusts_10m"), ps: g("surface_pressure"),
+      rad: g("shortwave_radiation") || 0, levels: [] };
     if (rec.Td2 == null) rec.Td2 = dewPoint(rec.T2, rec.RH2);
     for (const p of CONFIG.pressureLevels) {
       const z = g(`geopotential_height_${p}hPa`), ws = g(`wind_speed_${p}hPa`);
@@ -274,6 +277,7 @@ function buildRecords(chain) {
     const first = rec.levels[0] || {};
     rec.levels.unshift({ p: rec.ps || first.p, z: ground + 10, T: rec.T2, RH: rec.RH2,
       cc: rec.code === 45 || rec.code === 48 ? 100 : (first.cc || 0), ws: rec.ws10, wd: rec.wd10, surface: true });
+    adjustClouds(rec);
     rec.base = calcBase(rec);
     rec.start = calcStart(rec);
     out.push(rec);
@@ -302,28 +306,54 @@ function prof(rec, z) {
   return { z, T, RH, Td: dewPoint(T, RH), cc: lin(a.cc, b.cc), ws, wd, p };
 }
 
-// Basis: Kondensationsniveau (125 m/K Spread) oder trockene Thermikobergrenze – der niedrigere Wert
+// Wolkenprofil an die Modell-Gesamtbedeckung angleichen: Die Höhenwerte (aus Luftfeuchte abgeleitet)
+// werden je Stockwerk so skaliert, dass ihr Maximum der tiefen/mittleren/hohen Bedeckung des Modells entspricht.
+// Stockwerke nach DWD: tief > 800 hPa, mittel 800–400 hPa, hoch < 400 hPa.
+function adjustClouds(rec) {
+  const bands = [[p => p >= 800, rec.ccL], [p => p < 800 && p >= 400, rec.ccM], [p => p < 400, rec.ccH]];
+  for (const [inBand, target] of bands) {
+    if (target == null) continue;
+    const L = rec.levels.filter(l => l.p != null && inBand(l.p));
+    if (!L.length) continue;
+    const maxc = Math.max(...L.map(l => l.cc || 0));
+    if (maxc >= 5) {
+      const f = target / maxc;
+      L.forEach(l => l.cc = clamp((l.cc || 0) * f, 0, 100));
+    } else if (target >= 10) {
+      const wet = L.reduce((a, b) => ((b.RH || 0) > (a.RH || 0) ? b : a));
+      wet.cc = target;
+    }
+  }
+}
+
+// Thermik & Basis: Luftpaket vom Modellboden mit Überhitzung (abhängig von der Sonneneinstrahlung)
+// trockenadiabatisch heben. Basis = Kondensationsniveau (125 m je K Spread),
+// Thermik = Obergrenze des Aufstiegs, höchstens bis zur Basis.
 function calcBase(rec) {
   if (rec.T2 == null || rec.Td2 == null) return null;
-  const z0 = rec.ground, T0 = rec.T2 + CONFIG.ueberhitzung;
+  const z0 = rec.ground;
+  const uh = CONFIG.ueberhitzung * clamp(rec.rad / CONFIG.radFull, 0, 1);
+  const T0 = rec.T2 + uh;
   const lcl = z0 + 125 * Math.max(0, rec.T2 - rec.Td2);
   let top = z0;
   for (let z = z0 + 25; z <= 6000; z += 25) {
     const e = prof(rec, z); const Tp = T0 - 0.0098 * (z - z0);
-    if (Tp < e.T) { top = z; break; }
+    if (Tp < e.T) break;
     top = z;
   }
-  return { base: Math.round(Math.min(lcl, top)), lcl: Math.round(lcl), top: Math.round(top), cumulus: lcl <= top };
+  const thermik = Math.min(lcl, top);
+  return { base: Math.round(thermik), lcl: Math.round(lcl), top: Math.round(top), thermik: Math.round(thermik),
+           cumulus: lcl <= top, uh };
 }
 
-// Böen in der Höhe (geschätzt): Kein Modell liefert Böen auf Druckflächen. Der Böenanteil am Boden
-// (Böe − Mittelwind, 10 m) wird innerhalb der durchmischten Schicht (bis Thermikobergrenze) übernommen
-// und nimmt darüber über CONFIG.gustDecay Meter auf 0 ab. Mindestens Wind × gustMinFactor.
+// Böen in der Höhe (geschätzt): Kein Modell liefert Böen auf Druckflächen. Verwendet wird der
+// Böenfaktor am Boden (Böe ÷ Mittelwind, 10 m), begrenzt auf gustFactorMax. Er gilt in der
+// durchmischten Schicht (bis Thermikobergrenze) und nimmt darüber über gustDecay Meter auf gustMinFactor ab.
 function gustAt(rec, z, ws) {
-  const excess = Math.max(0, (rec.gust10 || 0) - (rec.ws10 || 0));
+  const r = clamp((rec.gust10 || 0) / Math.max(rec.ws10 || 0, 3), CONFIG.gustMinFactor, CONFIG.gustFactorMax);
   const top = Math.max(rec.base ? rec.base.top : rec.ground, rec.ground + 300);
   const f = z <= top ? 1 : clamp(1 - (z - top) / CONFIG.gustDecay, 0, 1);
-  return Math.max(ws * CONFIG.gustMinFactor, ws + excess * f);
+  return ws * (CONFIG.gustMinFactor + (r - CONFIG.gustMinFactor) * f);
 }
 
 // Wind & Temperatur am Startplatz
@@ -331,7 +361,7 @@ function calcStart(rec) {
   const below = SITE.alt <= rec.ground + 10;
   if (below) {
     const T = rec.T2 != null ? rec.T2 + (rec.ground - SITE.alt) * 0.0065 : null;
-    return { below, ws: rec.ws10, wd: rec.wd10, gust: Math.max(rec.gust10 || 0, rec.ws10 || 0), T, Td: rec.Td2, RH: rec.RH2, gustEstimated: false };
+    return { below, ws: rec.ws10, wd: rec.wd10, gust: gustAt(rec, rec.ground, rec.ws10 || 0), T, Td: rec.Td2, RH: rec.RH2, gustEstimated: true };
   }
   const p = prof(rec, SITE.alt);
   return { below, ws: p.ws, wd: p.wd, gust: gustAt(rec, SITE.alt, p.ws), T: p.T, Td: p.Td, RH: p.RH, p: p.p, gustEstimated: true };
@@ -380,7 +410,7 @@ function render() {
   setStatus("");
 
   const models = [...new Set(hrs.map(r => r.model))].join(" / ");
-  $("runinfo").textContent = models + (RUN && models.includes("D2") ? " · Lauf " + RUN.toLocaleString("de-DE", { day:"2-digit", month:"2-digit", hour:"2-digit" }) + " Uhr" : "") + (DEMO ? " · TESTDATEN" : "");
+  $("runinfo").textContent = models + (RUN && models.includes("D2") ? " · Lauf " + RUN.toLocaleString("de-DE", { day:"2-digit", month:"2-digit", hour:"2-digit" }) : "") + (DEMO ? " · TESTDATEN" : "");
 
   const W = $("chartWrap").clientWidth || 800;
   lastW = W;
@@ -397,7 +427,7 @@ function render() {
   const yProfTop = yRain + 18;
   const profH = mobile ? 340 : 440;
   const yProfBot = yProfTop + profH;
-  const yDir = yProfBot + 6, yWind = yDir + 34, yGust = yWind + 26, yTs = yGust + 26, yBase = yTs + 24, H = yBase + 24;
+  const yDir = yProfBot + 6, yWind = yDir + 34, yGust = yWind + 26, yTs = yGust + 26, yBase = yTs + 24, yTh = yBase + 24, H = yTh + 24;
 
   // Höhenbereich
   const ground = Math.min(...hrs.map(r => r.ground));
@@ -502,7 +532,7 @@ function render() {
   o.push(`<text x="${left + 4}" y="${ySt - 4}" font-size="${mobile ? 11 : 13}" fill="#222" stroke="#fff" stroke-width="3" paint-order="stroke" pointer-events="none">${stTxt}</text>`);
 
   // Startplatz-Zeilen
-  lbl(mobile ? "Richt." : "Richtung", yDir + 21); lbl("Wind", yWind + 17); lbl(mobile ? "Böen" : "Max Wind", yGust + 17); lbl("T Start", yTs + 16); lbl("Basis", yBase + 16);
+  lbl(mobile ? "Richt." : "Richtung", yDir + 21); lbl("Wind", yWind + 17); lbl(mobile ? "Böen" : "Max Wind", yGust + 17); lbl("T Start", yTs + 16); lbl("Basis", yBase + 16); lbl("Thermik", yTh + 16);
   hrs.forEach((r, i) => {
     const s = r.start, x = left + i * colW + 1.5, w = colW - 3, fs = mobile ? 11 : 14;
     if (!s || s.ws == null) return;
@@ -516,8 +546,9 @@ function render() {
     o.push(`<rect x="${x}" y="${yTs}" width="${w}" height="21" fill="#efefef"/>`);
     o.push(`<text x="${cx(i)}" y="${yTs + 15}" text-anchor="middle" font-size="${fs}" fill="#333">${s.T != null ? Math.round(s.T) : "–"}</text>`);
     o.push(`<rect x="${x}" y="${yBase}" width="${w}" height="21" fill="#efefef" class="hit" data-k="s" data-i="${i}"/>`);
-    const bt = r.base ? r.base.base : "–";
-    o.push(`<text x="${cx(i)}" y="${yBase + 15}" text-anchor="middle" font-size="${mobile ? 10 : 14}" fill="${r.base && !r.base.cumulus ? "#1565c0" : "#333"}" pointer-events="none">${bt}</text>`);
+    o.push(`<text x="${cx(i)}" y="${yBase + 15}" text-anchor="middle" font-size="${mobile ? 10 : 14}" fill="#333" pointer-events="none">${r.base ? r.base.lcl : "–"}</text>`);
+    o.push(`<rect x="${x}" y="${yTh}" width="${w}" height="21" fill="#efefef" class="hit" data-k="s" data-i="${i}"/>`);
+    o.push(`<text x="${cx(i)}" y="${yTh + 15}" text-anchor="middle" font-size="${mobile ? 10 : 14}" fill="${r.base && !r.base.cumulus ? "#1565c0" : "#333"}" pointer-events="none">${r.base ? r.base.thermik : "–"}</text>`);
   });
 
   o.push(`<g id="sel" pointer-events="none"></g></svg>`);
@@ -552,7 +583,9 @@ function openPopup(kind, i, z, ax, ay) {
       <div>Richtung</div><div>${f1(s.wd)}° (${dirName(s.wd)})</div>
       <div>Temperatur</div><div>${s.T != null ? s.T.toFixed(1) : "–"} °C</div>
       <div>Taupunkt</div><div>${s.Td != null ? s.Td.toFixed(1) : "–"} °C</div>
-      <div>Basis</div><div>${r.base ? r.base.base + " m" + (r.base.cumulus ? " (Wolkenbasis)" : " (blau, ohne Wolken)") : "–"}</div>
+      <div>Basis</div><div>${r.base ? r.base.lcl + " m" : "–"}</div>
+      <div>Thermik</div><div>${r.base ? r.base.thermik + " m" + (r.base.cumulus ? " (bis zur Basis)" : " (blau, ohne Wolken)") : "–"}</div>
+      <div>Einstrahlung</div><div>${Math.round(r.rad)} W/m² (Überhitzung ${r.base ? r.base.uh.toFixed(1) : "–"} K)</div>
       <div>Modellgrund</div><div>${Math.round(r.ground)} m</div></div>
       <div class="note">${r.model} · ${s.below ? "Startplatz liegt unter der Modellhöhe – es wird der Wind an der Untergrenze des Modells (10 m über Modellgrund) verwendet." : "Wind auf Startplatzhöhe aus dem Höhenprofil. Böen geschätzt aus dem Böenanteil am Modellboden und der Thermikhöhe."}</div>`;
   }
@@ -648,14 +681,18 @@ function setupLegend() {
     <div class="scale">Wind: ${sw(CONFIG.windSteps)}</div>
     <div class="scale">Böen: ${sw(CONFIG.gustSteps)}</div>
     Pfeile zeigen, wohin der Wind weht. Die Füllung zeigt die Windstärke, der Rand die Böen. Unter ${CONFIG.hollowBelow} km/h sind die Pfeile nur umrandet. Graustufen im Profil zeigen die Wolkendichte nach Höhe, die schraffierte Fläche liegt unter dem Modellgelände.
-    <h3>Basis (graue Linie)</h3>
-    Berechnet aus Temperatur und Taupunkt am Modellboden (125 m je Kelvin Spread) und einem trocken aufsteigenden Luftpaket (+${CONFIG.ueberhitzung} K Überhitzung).
-    Es gilt der niedrigere Wert. Eine <span style="color:#1565c0">blaue Zahl</span> bedeutet Blauthermik ohne Wolkenbildung.
+    <h3>Basis und Thermik (graue Linie = Thermik)</h3>
+    <b>Basis</b>: Kondensationsniveau aus Temperatur und Taupunkt am Modellboden (125 m je Kelvin Spread).
+    <b>Thermik</b>: So hoch steigt ein trocken aufsteigendes Luftpaket vom Modellboden, höchstens bis zur Basis.
+    Die Überhitzung des Luftpakets hängt von der Sonneneinstrahlung ab: bis ${CONFIG.ueberhitzung} K ab ${CONFIG.radFull} W/m², ohne Sonne keine.
+    Eine <span style="color:#1565c0">blaue Thermikzahl</span> bedeutet Blauthermik: Die Thermik endet unter der Basis, es bilden sich keine Wolken.
+    <h3>Wolken im Höhenprofil</h3>
+    Wolkendichte je Höhe aus dem Modell, angeglichen an die Bedeckung mit tiefen, mittleren und hohen Wolken (Zeilen T/M/H).
     <h3>Daten</h3>
     DWD ICON-D2 (2 km, 48 h) über Open-Meteo, danach automatisch ICON-EU (7 km, bis Tag 5) und ICON-Global (13 km, bis Tag 7). Je weiter in der Zukunft, desto gröber das Modell und unsicherer die Vorhersage.
     Die Druckflächen 925, 900 und 800 hPa interpoliert Open-Meteo bei ICON-D2.
     Böen liefert kein Modell in der Höhe, nur 10 m über Grund. In der Höhe sind sie deshalb geschätzt:
-    Der Böenanteil am Boden gilt bis zur Thermikobergrenze und nimmt darüber auf ${CONFIG.gustDecay} m ab, mindestens Wind × ${CONFIG.gustMinFactor}.
+    Der Böenfaktor am Boden (Böe ÷ Wind, höchstens ${CONFIG.gustFactorMax}) gilt bis zur Thermikobergrenze. Darüber sinkt er auf ${CONFIG.gustDecay} m auf ${CONFIG.gustMinFactor}.
     Wetterdaten: Open-Meteo.com (CC BY 4.0), DWD.`;
 }
 
