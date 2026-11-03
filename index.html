@@ -135,7 +135,8 @@ const CONFIG = {
   modelsEU: ["icon_eu", "dwd_icon_eu"],
   modelsGL: ["icon_global", "dwd_icon_global"],
   days: 7,
-  mixMin: 100,             // m, Mindestdicke der durchmischten Schicht über Modellboden (Böen)
+  zMaxExpanded: 5000,      // m, Obergrenze des Profils nach Klick auf das Dreieck
+  mixMin: 100,            // m, Mindestdicke der durchmischten Schicht über Modellboden (Böen)
   hagl: [80, 120, 180],    // m über Grund: zusätzliche Modellwerte für Wind/Temperatur
   gustDecay: 600,         // m über Thermikobergrenze, in denen der Böenanteil auf 0 abnimmt
   gustMinFactor: 1.3,      // Böenfaktor oberhalb der durchmischten Schicht
@@ -457,6 +458,7 @@ function arrowSvg(x, y, ws, wd, size, fill, stroke, sw, attrs = "") {
 
 /* ===================== Zeichnen ===================== */
 let RECS = [], DAYS = [], CUR = 0, RUN = null, LAYOUT = null, AROME = {}, LAYOUT_ROWH = 13;
+let EXPANDED = false; try { EXPANDED = localStorage.getItem("fw_expanded") === "1"; } catch {}
 // Bedeckung in Achteln: unter 1/8 = 0 (weiß), sonst gerundet auf 1–8
 const octas = cc => (cc == null || cc < 12.5) ? 0 : Math.min(8, Math.round(cc / 12.5));
 const octaGray = ok => Math.round(232 - (ok - 1) / 7 * 222);   // 1/8 hellgrau … 8/8 fast schwarz
@@ -493,7 +495,7 @@ function render() {
   const yHour = 14, yIcon = 40, yTemp = 64;
   const rowH = 13, yH = 76, yM = yH + rowH + 1, yT = yM + rowH + 1, yRain = yT + rowH + 2;
   const yProfTop = yRain + 18;
-  const profH = mobile ? 340 : 440;
+  const profH = (mobile ? 340 : 440) * (EXPANDED ? 1.8 : 1);
   const yProfBot = yProfTop + profH;
   const yDir = yProfBot + 6, yWind = yDir + 34, yGust = yWind + 26, yTs = yGust + 26, yBase = yTs + 24, yTh = yBase + 24;
   const hasArome = hrs.some(r => AROME[r.time]);
@@ -505,7 +507,8 @@ function render() {
   const below = SITE.alt <= ground + 10;
   const maxBase = Math.max(...hrs.map(r => r.base ? r.base.base : 0));
   const zMin = below ? Math.floor((SITE.alt - 80) / 50) * 50 : Math.floor(ground / 50) * 50;
-  const zMax = Math.min(5000, Math.ceil(Math.max(SITE.alt + 1100, maxBase + 300, zMin + 1200) / 100) * 100);
+  const zMaxNormal = Math.min(5000, Math.ceil(Math.max(SITE.alt + 1100, maxBase + 300, zMin + 1200) / 100) * 100);
+  const zMax = EXPANDED ? Math.max(zMaxNormal, CONFIG.zMaxExpanded) : zMaxNormal;
   const yz = z => yProfBot - (z - zMin) / (zMax - zMin) * profH;
   LAYOUT = { cx, colW, yz, hrs, totalW, H, yDir, yWind, yGust, yTs, yBase };
 
@@ -541,10 +544,19 @@ function render() {
     if (mm >= 0.1) o.push(`<text x="${cx(i)}" y="${yRain + 11}" text-anchor="middle" font-size="10.5" fill="${mm > 1.5 ? "#fff" : "#3b1a55"}">${mm.toFixed(1)}</text>`);
   });
 
+  // Dreieck: höhere Schichten ein-/ausblenden
+  {
+    const tx = mobile ? 14 : 22, ty = yProfTop + 8;
+    const tri = EXPANDED ? `M${tx - 8},${ty - 4} L${tx + 8},${ty - 4} L${tx},${ty + 6} Z` : `M${tx - 8},${ty + 5} L${tx + 8},${ty + 5} L${tx},${ty - 5} Z`;
+    o.push(`<g class="hit" data-k="x"><title>${EXPANDED ? "Höhere Schichten ausblenden" : "Höhere Schichten einblenden"}</title>
+      <rect x="${tx - 13}" y="${ty - 11}" width="26" height="22" fill="transparent"/><path d="${tri}" fill="#111"/></g>`);
+  }
+
   // Höhenachse + Gitter
   const tick = (zMax - zMin) > 2500 ? 500 : 250;
   for (let z = Math.ceil(zMin / tick) * tick; z <= zMax; z += tick) {
     const yy = yz(z);
+    if (yy < yProfTop + 10) continue;
     o.push(`<line x1="${left}" y1="${yy}" x2="${totalW - right}" y2="${yy}" stroke="#e6e6e6"/>`);
     o.push(`<text x="${left - 5}" y="${yy + 4}" text-anchor="end" font-size="${mobile ? 10.5 : 13}" fill="#333">${z.toLocaleString("de-DE")}</text>`);
   }
@@ -747,6 +759,7 @@ function popupFor(t, compact) {
 $("chartWrap").addEventListener("click", e => {
   const t = e.target.closest("[data-k]");
   if (!t) { if (!e.target.closest("#popup")) closePopup(); return; }
+  if (t.dataset.k === "x") { EXPANDED = !EXPANDED; try { localStorage.setItem("fw_expanded", EXPANDED ? "1" : "0"); } catch {} render(); return; }
   popupFor(t, false); PINNED = true;
 });
 // Darüberfahren mit der Maus: kurze Info, solange kein Fenster angeheftet ist
@@ -754,7 +767,7 @@ let HOVER_EL = null;
 $("chartWrap").addEventListener("pointerover", e => {
   if (e.pointerType !== "mouse" || PINNED) return;
   const t = e.target.closest("[data-k]");
-  if (!t || t === HOVER_EL) return;
+  if (!t || t === HOVER_EL || t.dataset.k === "x") return;
   HOVER_EL = t; popupFor(t, true);
 });
 $("chartWrap").addEventListener("pointerout", e => {
