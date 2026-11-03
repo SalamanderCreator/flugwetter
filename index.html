@@ -567,7 +567,7 @@ function render() {
   // Profilspalten: Hintergrund, Wolkendichte nach Höhe
   hrs.forEach((r, i) => {
     const x = left + i * colW + 2, w = colW - 4;
-    o.push(`<rect x="${x}" y="${yProfTop}" width="${w}" height="${profH}" rx="5" fill="#ffffff" stroke="#e4e4e4"/>`);
+    o.push(`<rect x="${x}" y="${yProfTop}" width="${w}" height="${profH}" rx="5" fill="#ffffff" stroke="#ececec" stroke-width="0.6"/>`);
     if (r.ground > zMin) o.push(`<rect x="${x}" y="${yz(r.ground)}" width="${w}" height="${yProfBot - yz(r.ground)}" fill="url(#hatch)"/>`);
     // Wolken in Achteln; gleiche Achtel übereinander werden zu einem Block zusammengefasst
     const zs = Math.max(zMin, r.ground);
@@ -595,14 +595,14 @@ function render() {
 
   // Windpfeile im Profil
   const span = zMax - zMin;
-  const step = [50, 100, 150, 200, 250, 300, 500].find(s => s / span * profH >= (mobile ? 17 : 21)) || 500;
-  const aSize = Math.min(mobile ? 13 : 17, colW * 0.55);
+  const step = [50, 100, 150, 200, 250, 300, 500].find(s => s / span * profH >= (mobile ? 19 : 24)) || 500;
+  const aSize = Math.min(mobile ? 19 : 27, colW * 0.75);
   hrs.forEach((r, i) => {
     for (let z = Math.ceil((r.ground + 30) / step) * step; z <= zMax - step * 0.4; z += step) {
       if (z < zMin) continue;
       const p = prof(r, z); if (!p) continue;
       const f = windColor(p.ws), gc = gustColor(gustAt(r, z, p.ws));
-      o.push(arrowSvg(cx(i), yz(z), p.ws, p.wd, aSize, f, gc === f ? darker(f) : gc, gc === f ? 1.1 : 1.7, `class="hit" data-k="p" data-i="${i}" data-z="${z}"`));
+      o.push(arrowSvg(cx(i), yz(z), p.ws, p.wd, aSize, f, gc === f ? darker(f) : gc, gc === f ? 1.2 : 2, `class="hit" data-k="p" data-i="${i}" data-z="${z}"`));
     }
   });
 
@@ -724,7 +724,9 @@ function openPopup(kind, i, z, ax, ay, opt = {}) {
   if (!compact) pop.querySelector(".x").onclick = e => { e.stopPropagation(); closePopup(); };
 
   // Auswahlrahmen: um den Pfeil (Quadrat) oder um den Wolkenblock / die Schichtzelle
-  const b = opt.box || { x: ax - (kind === "p" ? 13 : 16), y: ay - (kind === "p" ? 13 : 16), w: kind === "p" ? 26 : 32, h: kind === "p" ? 26 : 32 };
+  const fine = kind === "c" || kind === "l";
+  const sz = kind === "p" ? 17 : 16;
+  const b = opt.box || { x: ax - sz, y: ay - sz, w: sz * 2, h: sz * 2 };
   const pw = pop.offsetWidth, ph = pop.offsetHeight;
   const gap = 18;
   let px = b.x + b.w + gap, side = "r";
@@ -736,8 +738,9 @@ function openPopup(kind, i, z, ax, ay, opt = {}) {
   const sx = side === "r" ? b.x + b.w : b.x;
   document.getElementById("sel").innerHTML =
     `<line x1="${ax}" y1="0" x2="${ax}" y2="${LAYOUT.H}" stroke="#555" stroke-dasharray="3 3" stroke-width="1"/>
-     <rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="5" fill="none" stroke="#111" stroke-width="2.2"/>
-     <rect x="${b.x + 2.2}" y="${b.y + 2.2}" width="${Math.max(0, b.w - 4.4)}" height="${Math.max(0, b.h - 4.4)}" rx="3.5" fill="none" stroke="#fff" stroke-width="1.2"/>
+     ${fine ? `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="4" fill="none" stroke="#111" stroke-width="1"/>`
+       : `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="5" fill="none" stroke="#111" stroke-width="2.2"/>
+     <rect x="${b.x + 2.2}" y="${b.y + 2.2}" width="${Math.max(0, b.w - 4.4)}" height="${Math.max(0, b.h - 4.4)}" rx="3.5" fill="none" stroke="#fff" stroke-width="1.2"/>`}
      <line x1="${sx}" y1="${ay}" x2="${ex}" y2="${ey}" stroke="#0b2e59" stroke-width="2"/>`;
 }
 
