@@ -114,7 +114,9 @@ const CONFIG = {
   modelsEU: ["icon_eu", "dwd_icon_eu"],
   modelsGL: ["icon_global", "dwd_icon_global"],
   days: 7,
-  gustDecay: 600,          // m über Thermikobergrenze, in denen der Böenanteil auf 0 abnimmt
+  mixMin: 100,             // m, Mindestdicke der durchmischten Schicht über Modellboden (Böen)
+  hagl: [80, 120, 180],    // m über Grund: zusätzliche Modellwerte für Wind/Temperatur
+  gustDecay: 600,         // m über Thermikobergrenze, in denen der Böenanteil auf 0 abnimmt
   gustMinFactor: 1.3,      // Böenfaktor oberhalb der durchmischten Schicht
   gustFactorMax: 1.7,      // größter Böenfaktor (Böe ÷ Wind)
 };
@@ -176,10 +178,11 @@ function civilTwilight(y, m, d, lat, lon) {
 const SURF = ["temperature_2m","dew_point_2m","relative_humidity_2m","precipitation","weather_code",
   "cloud_cover_low","cloud_cover_mid","cloud_cover_high","wind_speed_10m","wind_direction_10m",
   "wind_gusts_10m","surface_pressure","is_day","shortwave_radiation"];
+const HAGL_VARS = CONFIG.hagl.flatMap(h => [`wind_speed_${h}m`, `wind_direction_${h}m`, `temperature_${h}m`]);
 const PLV = ["temperature","relative_humidity","cloud_cover","wind_speed","wind_direction","geopotential_height"];
 
 function apiUrl(model) {
-  const hourly = [...SURF, ...CONFIG.pressureLevels.flatMap(p => PLV.map(v => `${v}_${p}hPa`))].join(",");
+  const hourly = [...SURF, ...HAGL_VARS, ...CONFIG.pressureLevels.flatMap(p => PLV.map(v => `${v}_${p}hPa`))].join(",");
   return "https://api.open-meteo.com/v1/forecast?latitude=" + SITE.lat + "&longitude=" + SITE.lon +
     "&elevation=nan&models=" + model + "&timezone=auto&forecast_days=" + CONFIG.days + "&wind_speed_unit=kmh&hourly=" + hourly;
 }
@@ -208,7 +211,7 @@ function makeDemo(model) {
   const isD2 = model === "d2", isEU = model === "eu";
   const ground = isD2 ? 1210 : (isEU ? 1090 : 980);
   const now = new Date(); const y = now.getFullYear(), mo = now.getMonth(), d = now.getDate();
-  const H = { time: [] }; [...SURF, ...CONFIG.pressureLevels.flatMap(p => PLV.map(v => `${v}_${p}hPa`))].forEach(k => H[k] = []);
+  const H = { time: [] }; [...SURF, ...HAGL_VARS, ...CONFIG.pressureLevels.flatMap(p => PLV.map(v => `${v}_${p}hPa`))].forEach(k => H[k] = []);
   for (let i = 0; i < 24 * CONFIG.days; i++) {
     const dt = new Date(y, mo, d, i); const h = dt.getHours(), day = Math.floor(i / 24) % 3;
     H.time.push(`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}T${String(h).padStart(2,"0")}:00`);
@@ -222,7 +225,8 @@ function makeDemo(model) {
     put("temperature_2m", T2); put("dew_point_2m", T2 - spread); put("relative_humidity_2m", clamp(100 - spread * 6, 30, 100));
     put("precipitation", rain); put("is_day", h >= 7 && h <= 16 ? 1 : 0); put("shortwave_radiation", 650 * sun * (rain ? 0.3 : 1));
     put("wind_speed_10m", 4 + 6 * sun + day * 3); put("wind_direction_10m", 20 + 30 * sun);
-    put("wind_gusts_10m", (4 + 6 * sun + day * 3) * 1.9); put("surface_pressure", 1013.25 * Math.pow(1 - ground / 44330, 5.255));
+    put("wind_gusts_10m", (4 + 6 * sun + day * 3) * 1.9);
+    for (const hh of CONFIG.hagl) { put(`wind_speed_${hh}m`, 4 + 6 * sun + day * 3 + hh / 40); put(`wind_direction_${hh}m`, 20 + 30 * sun + hh / 10); put(`temperature_${hh}m`, T2 - hh * 0.008); } put("surface_pressure", 1013.25 * Math.pow(1 - ground / 44330, 5.255));
     const ccMid = day === 1 ? clamp((h - 9) * 15, 0, 90) : (day === 2 ? 40 : 10);
     const ccHigh = 30 + 20 * Math.sin(i / 7);
     put("cloud_cover_low", ccLowBase + (rain ? 50 : 0)); put("cloud_cover_mid", ccMid); put("cloud_cover_high", clamp(ccHigh, 0, 100));
@@ -277,6 +281,15 @@ function buildRecords(chain) {
     const first = rec.levels[0] || {};
     rec.levels.unshift({ p: rec.ps || first.p, z: ground + 10, T: rec.T2, RH: rec.RH2,
       cc: rec.code === 45 || rec.code === 48 ? 100 : (first.cc || 0), ws: rec.ws10, wd: rec.wd10, surface: true });
+    // zusätzliche Modellhöhen über Grund (80/120/180 m): Wind & Temperatur direkt, Rest interpoliert
+    const extra = [];
+    for (const hh of CONFIG.hagl) {
+      const ws = g(`wind_speed_${hh}m`), wd = g(`wind_direction_${hh}m`);
+      if (ws == null || wd == null) continue;
+      const z = ground + hh, ip = prof(rec, z), T = g(`temperature_${hh}m`);
+      extra.push({ p: ip.p, z, T: T != null ? T : ip.T, RH: ip.RH, cc: ip.cc, ws, wd, hagl: true });
+    }
+    if (extra.length) { rec.levels.push(...extra); rec.levels.sort((a, b) => a.z - b.z); }
     adjustClouds(rec);
     rec.base = calcBase(rec);
     rec.start = calcStart(rec);
@@ -351,7 +364,7 @@ function calcBase(rec) {
 // durchmischten Schicht (bis Thermikobergrenze) und nimmt darüber über gustDecay Meter auf gustMinFactor ab.
 function gustAt(rec, z, ws) {
   const r = clamp((rec.gust10 || 0) / Math.max(rec.ws10 || 0, 3), CONFIG.gustMinFactor, CONFIG.gustFactorMax);
-  const top = Math.max(rec.base ? rec.base.top : rec.ground, rec.ground + 300);
+  const top = Math.max(rec.base ? rec.base.top : rec.ground, rec.ground + CONFIG.mixMin);
   const f = z <= top ? 1 : clamp(1 - (z - top) / CONFIG.gustDecay, 0, 1);
   return ws * (CONFIG.gustMinFactor + (r - CONFIG.gustMinFactor) * f);
 }
