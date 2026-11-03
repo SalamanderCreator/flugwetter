@@ -32,6 +32,9 @@
   #popup .g { display:grid; grid-template-columns:auto auto; gap:2px 14px; }
   #popup .g div:nth-child(odd) { color:var(--muted); }
   #popup .note { color:var(--muted); font-size:12px; margin-top:6px; border-top:1px solid #d6d6d6; padding-top:4px; }
+  #popup .sep { border-top:1px solid #cfcfcf; margin:5px 0 4px; }
+  #popup .note2 { color:var(--muted); font-size:13px; max-width:280px; }
+  #popup.compact { min-width:150px; pointer-events:none; padding:6px 10px 6px 9px; font-size:13px; }
   #popup .x { position:absolute; right:6px; top:2px; border:0; background:none; font-size:18px; cursor:pointer; color:var(--muted); }
   #legend { padding:10px 12px 24px; font-size:13px; color:var(--muted); line-height:1.45; max-width:900px; }
   #legend .scale { display:flex; flex-wrap:wrap; gap:4px; margin:4px 0 8px; align-items:center; }
@@ -47,9 +50,25 @@
   #infoPanel td:first-child { color:var(--muted); white-space:nowrap; width:1%; padding-right:12px; }
   #infoPanel .close { float:right; }
   #infoPanel .src { color:var(--muted); font-size:12px; margin-top:12px; }
+  #side { display:none; }
+  @media (min-width: 1100px) {
+    #layout { display:flex; align-items:flex-start; }
+    #side { display:block; flex:0 0 340px; height:100vh; overflow:auto; position:sticky; top:0; padding:14px 16px;
+            border-right:1px solid var(--line); background:#fafafa; font-size:14px; }
+    #main { flex:1 1 auto; min-width:0; }
+    body:not(.noside) #btnInfo { display:none; }
+  }
+  #side h2 { font-size:17px; margin:0 0 8px; } #side h3 { font-size:15px; margin:14px 0 4px; }
+  #side table { border-collapse:collapse; width:100%; }
+  #side td { padding:3px 6px 3px 0; vertical-align:top; }
+  #side td:first-child { color:var(--muted); white-space:nowrap; width:1%; padding-right:12px; }
+  #side .src { color:var(--muted); font-size:12px; margin-top:12px; }
 </style>
 </head>
 <body>
+<div id="layout">
+<aside id="side"></aside>
+<main id="main">
 <header>
   <div>
     <h1 id="siteName">–</h1>
@@ -65,6 +84,8 @@
 <div id="status">Lade Wetterdaten …</div>
 <div id="chartWrap"><div id="chart"></div><div id="popup" hidden></div></div>
 <section id="legend"></section>
+</main>
+</div>
 
 <div id="infoPanel" hidden><div class="card" id="infoCard"></div></div>
 
@@ -435,7 +456,15 @@ function arrowSvg(x, y, ws, wd, size, fill, stroke, sw, attrs = "") {
 }
 
 /* ===================== Zeichnen ===================== */
-let RECS = [], DAYS = [], CUR = 0, RUN = null, LAYOUT = null, AROME = {};
+let RECS = [], DAYS = [], CUR = 0, RUN = null, LAYOUT = null, AROME = {}, LAYOUT_ROWH = 13;
+// Bedeckung in Achteln: unter 1/8 = 0 (weiß), sonst gerundet auf 1–8
+const octas = cc => (cc == null || cc < 12.5) ? 0 : Math.min(8, Math.round(cc / 12.5));
+const octaGray = ok => Math.round(232 - (ok - 1) / 7 * 222);   // 1/8 hellgrau … 8/8 fast schwarz
+const LAYER_INFO = {
+  H: ["Hohe Schichtbewölkung", "ccH", "Über etwa 6 km Höhe. Wolkenfamilien: Cirrus, Cirrostratus, Cirrocumulus."],
+  M: ["Mittelhohe Bewölkung", "ccM", "Etwa 2–6 km Höhe. Wolkenfamilien: Altocumulus, Altostratus, Nimbostratus."],
+  T: ["Tiefe Bewölkung", "ccL", "Bis etwa 2 km über Grund. Wolkenfamilien: Stratus, Stratocumulus, Cumulus, Cumulonimbus."],
+};
 
 function render() {
   closePopup();
@@ -499,10 +528,11 @@ function render() {
   [["H", yH, "ccH", "#ffffff"], ["M", yM, "ccM", "#000000"], ["T", yT, "ccL", "#000000"]].forEach(([t, yy, k, full]) => {
     lbl(t, yy + rowH - 2);
     hrs.forEach((r, i) => {
-      const cc = clamp((r[k] || 0) / 100, 0, 1);
-      o.push(`<rect x="${left + i * colW}" y="${yy}" width="${colW + 0.5}" height="${rowH}" fill="${mix("#a9d2fb", full, cc)}"/>`);
+      const ok = octas(r[k]);
+      o.push(`<rect x="${left + i * colW}" y="${yy}" width="${colW + 0.5}" height="${rowH}" fill="${mix("#a9d2fb", full, ok / 8)}" class="hit" data-k="l" data-l="${t}" data-i="${i}" data-y="${yy}"/>`);
     });
   });
+  LAYOUT_ROWH = rowH;
   lbl("Regen", yRain + 11, 11);
   hrs.forEach((r, i) => {
     const mm = r.precip || 0;
@@ -525,15 +555,23 @@ function render() {
   // Profilspalten: Hintergrund, Wolkendichte nach Höhe
   hrs.forEach((r, i) => {
     const x = left + i * colW + 2, w = colW - 4;
-    o.push(`<rect x="${x}" y="${yProfTop}" width="${w}" height="${profH}" rx="5" fill="#f3f3f3"/>`);
+    o.push(`<rect x="${x}" y="${yProfTop}" width="${w}" height="${profH}" rx="5" fill="#ffffff" stroke="#e4e4e4"/>`);
     if (r.ground > zMin) o.push(`<rect x="${x}" y="${yz(r.ground)}" width="${w}" height="${yProfBot - yz(r.ground)}" fill="url(#hatch)"/>`);
-    for (let z = Math.max(zMin, r.ground); z < zMax; z += 50) {
+    // Wolken in Achteln; gleiche Achtel übereinander werden zu einem Block zusammengefasst
+    const zs = Math.max(zMin, r.ground);
+    let blk = null;
+    const flush = () => {
+      if (!blk || !blk.o) return;
+      const g = octaGray(blk.o), y1 = yz(blk.z1), y0 = yz(blk.z0);
+      o.push(`<rect x="${x}" y="${y1}" width="${w}" height="${y0 - y1 + 0.4}" fill="rgb(${g},${g},${g})" class="hit" data-k="c" data-i="${i}" data-z0="${blk.z0}" data-z1="${blk.z1}" data-o="${blk.o}"/>`);
+    };
+    for (let z = zs; z < zMax; z += 50) {
       const pz = prof(r, z + 25); if (!pz) continue;
-      const cc = clamp(pz.cc || 0, 0, 100);
-      if (cc < 3) continue;
-      const g = Math.round(243 - cc / 100 * 228);
-      o.push(`<rect x="${x}" y="${yz(Math.min(z + 50, zMax))}" width="${w}" height="${yz(z) - yz(Math.min(z + 50, zMax)) + 0.4}" fill="rgb(${g},${g},${g})"/>`);
+      const ok = octas(pz.cc), z1 = Math.min(z + 50, zMax);
+      if (blk && blk.o === ok) { blk.z1 = z1; continue; }
+      flush(); blk = { o: ok, z0: z, z1 };
     }
+    flush();
   });
 
   // Startplatzhöhe
@@ -618,85 +656,114 @@ function render() {
 }
 
 /* ===================== Popup ===================== */
-function closePopup() { $("popup").hidden = true; const s = document.getElementById("sel"); if (s) s.innerHTML = ""; }
+let PINNED = false;
+function closePopup() { PINNED = false; $("popup").hidden = true; const s = document.getElementById("sel"); if (s) s.innerHTML = ""; }
 
-function openPopup(kind, i, z, ax, ay) {
+// kind: p = Wind im Profil, s = Startplatz, a = AROME, c = Wolkenblock im Profil, l = Wolkenschicht H/M/T
+// compact = true: kurze Info beim Darüberfahren (ohne die Werte unter dem Strich)
+function openPopup(kind, i, z, ax, ay, opt = {}) {
   const r = LAYOUT.hrs[i]; const pop = $("popup");
   const hh = String(r.hour).padStart(2, "0") + ":00";
   const f1 = v => v == null ? "–" : Math.round(v);
+  const compact = !!opt.compact;
+  const grid = rows => `<div class="g">${rows.map(([k, v]) => `<div>${k}</div><div>${v}</div>`).join("")}</div>`;
+  const note = t => compact ? "" : `<div class="note">${t}</div>`;
   let html = "";
   if (kind === "p") {
-    const p = prof(r, z);
-    html = `<div class="t">Wind ${hh}<span>${z.toLocaleString("de-DE")} m</span></div>
-      <div class="g"><div>Wind</div><div><b>${f1(p.ws)} km/h</b></div>
-      <div>Böen</div><div><b>${f1(gustAt(r, z, p.ws))} km/h</b> (geschätzt)</div>
-      <div>Richtung</div><div>${f1(p.wd)}° (${dirName(p.wd)})</div>
-      <div>Temperatur</div><div>${p.T != null ? p.T.toFixed(1) : "–"} °C</div>
-      <div>Taupunkt</div><div>${p.Td != null ? p.Td.toFixed(1) : "–"} °C</div>
-      <div>Rel. Luftf.</div><div>${f1(p.RH)} %</div>
-      <div>Bewölkung</div><div>${f1(p.cc)} %</div>
-      <div>Luftdruck</div><div>${f1(p.p)} hPa</div></div>
-      <div class="note">${r.model} · Wind und Temperatur auf gegebener Höhe, ohne Talwind. Böen geschätzt aus dem Böenanteil am Modellboden und der Thermikhöhe.</div>`;
+    const p = prof(r, z), g = gustAt(r, z, p.ws);
+    const main = [["Wind", `<b>${f1(p.ws)} km/h</b>`], ["Böen", `<b>${f1(g)} km/h</b> (geschätzt)`], ["Richtung", `${f1(p.wd)}° (${dirName(p.wd)})`]];
+    const more = [["Temperatur", `${p.T != null ? p.T.toFixed(1) : "–"} °C`], ["Taupunkt", `${p.Td != null ? p.Td.toFixed(1) : "–"} °C`],
+                  ["Rel. Luftf.", `${f1(p.RH)} %`], ["Bewölkung", `${octas(p.cc)} Achtel`], ["Luftdruck", `${f1(p.p)} hPa`]];
+    html = `<div class="t">Wind ${hh}<span>${z.toLocaleString("de-DE")} m</span></div>` + grid(main) +
+      (compact ? "" : `<div class="sep"></div>` + grid(more)) +
+      note(`${r.model} · Wind und Temperatur auf gegebener Höhe, ohne Talwind. Böen geschätzt aus dem Böenfaktor am Modellboden und der Thermikhöhe.`);
   } else if (kind === "a") {
     const a = AROME[r.time];
-    html = `<div class="t">${esc(a.model)} ${hh}<span>Modellboden ${Math.round(a.elev)} m</span></div>
-      <div class="g"><div>Wind</div><div><b>${f1(a.ws)} km/h</b></div>
-      <div>Böen</div><div><b>${f1(a.gust)} km/h</b></div>
-      <div>Richtung</div><div>${f1(a.wd)}° (${dirName(a.wd)})</div>
-      <div>Temperatur</div><div>${a.T != null ? a.T.toFixed(1) : "–"} °C</div></div>
-      <div class="note">Wind 10 m über dem Modellgelände (${Math.round(a.elev)} m), nicht auf Startplatzhöhe (${SITE.alt} m).
-      AROME bildet lokale Hang- und Talwinde oft besser ab als ICON-D2.</div>`;
+    const main = [["Wind", `<b>${f1(a.ws)} km/h</b>`], ["Böen", `<b>${f1(a.gust)} km/h</b>`], ["Richtung", `${f1(a.wd)}° (${dirName(a.wd)})`]];
+    html = `<div class="t">${esc(a.model)} ${hh}<span>Modellboden ${Math.round(a.elev)} m</span></div>` + grid(main) +
+      (compact ? "" : `<div class="sep"></div>` + grid([["Temperatur", `${a.T != null ? a.T.toFixed(1) : "–"} °C`]])) +
+      note(`Wind 10 m über dem Modellgelände (${Math.round(a.elev)} m), nicht auf Startplatzhöhe (${SITE.alt} m). AROME bildet lokale Hang- und Talwinde oft besser ab als ICON-D2.`);
+  } else if (kind === "c") {
+    const z0 = opt.z0, z1 = opt.z1, mid = prof(r, (z0 + z1) / 2);
+    html = `<div class="t">Wolken ${hh}<span>${z0.toLocaleString("de-DE")}–${z1.toLocaleString("de-DE")} m</span></div>` +
+      grid([["Menge", `<b>${opt.o} Achtel</b>`]]) +
+      (compact ? `<div class="sep"></div><div class="note2">Bewölkungsgrad</div>` :
+        `<div class="sep"></div>` + grid([["Rel. Luftf.", `${f1(mid.RH)} %`], ["Temperatur", `${mid.T != null ? mid.T.toFixed(1) : "–"} °C`]]) +
+        note(`${r.model} · Bewölkungsgrad in dieser Höhe, angeglichen an die Bedeckung mit tiefen, mittleren und hohen Wolken.`));
+  } else if (kind === "l") {
+    const [name, key, desc] = LAYER_INFO[opt.l];
+    html = `<div class="t">${name}<span>${hh}</span></div>` + grid([["Menge", `<b>${octas(r[key])} Achtel</b>`]]) +
+      `<div class="sep"></div><div class="note2">${desc}</div>` + note(`${r.model} · Modellwert ${f1(r[key])} %`);
   } else {
     const s = r.start;
-    html = `<div class="t">Startplatz ${hh}<span>${SITE.alt.toLocaleString("de-DE")} m</span></div>
-      <div class="g"><div>Wind</div><div><b>${f1(s.ws)} km/h</b></div>
-      <div>Böen</div><div><b>${f1(s.gust)} km/h</b>${s.gustEstimated ? " (geschätzt)" : ""}</div>
-      <div>Richtung</div><div>${f1(s.wd)}° (${dirName(s.wd)})</div>
-      <div>Temperatur</div><div>${s.T != null ? s.T.toFixed(1) : "–"} °C</div>
-      <div>Taupunkt</div><div>${s.Td != null ? s.Td.toFixed(1) : "–"} °C</div>
-      <div>Basis</div><div>${r.base ? r.base.lcl + " m" : "–"}</div>
-      <div>Thermik</div><div>${r.base ? r.base.thermik + " m" + (r.base.cumulus ? " (bis zur Basis)" : " (blau, ohne Wolken)") : "–"}</div>
-      <div>Einstrahlung</div><div>${Math.round(r.rad)} W/m² (Überhitzung ${r.base ? r.base.uh.toFixed(1) : "–"} K)</div>
-      <div>Modellgrund</div><div>${Math.round(r.ground)} m</div></div>
-      <div class="note">${r.model} · ${s.below ? "Startplatz liegt unter der Modellhöhe – es wird der Wind an der Untergrenze des Modells (10 m über Modellgrund) verwendet." : "Wind auf Startplatzhöhe aus dem Höhenprofil. Böen geschätzt aus dem Böenanteil am Modellboden und der Thermikhöhe."}</div>`;
+    const main = [["Wind", `<b>${f1(s.ws)} km/h</b>`], ["Böen", `<b>${f1(s.gust)} km/h</b>${s.gustEstimated ? " (geschätzt)" : ""}`], ["Richtung", `${f1(s.wd)}° (${dirName(s.wd)})`]];
+    const more = [["Temperatur", `${s.T != null ? s.T.toFixed(1) : "–"} °C`], ["Taupunkt", `${s.Td != null ? s.Td.toFixed(1) : "–"} °C`],
+      ["Basis", r.base ? r.base.lcl + " m" : "–"],
+      ["Thermik", r.base ? r.base.thermik + " m" + (r.base.cumulus ? " (bis zur Basis)" : " (blau, ohne Wolken)") : "–"],
+      ["Einstrahlung", `${Math.round(r.rad)} W/m² (Überhitzung ${r.base ? r.base.uh.toFixed(1) : "–"} K)`],
+      ["Modellgrund", `${Math.round(r.ground)} m`]];
+    html = `<div class="t">Startplatz ${hh}<span>${SITE.alt.toLocaleString("de-DE")} m</span></div>` + grid(main) +
+      (compact ? "" : `<div class="sep"></div>` + grid(more)) +
+      note(`${r.model} · ${s.below ? "Startplatz liegt unter der Modellhöhe – es wird der Wind an der Untergrenze des Modells (10 m über Modellgrund) verwendet." : "Wind auf Startplatzhöhe aus dem Höhenprofil. Böen geschätzt aus dem Böenfaktor am Modellboden und der Thermikhöhe."}`);
   }
-  pop.innerHTML = `<button class="x" aria-label="Schließen">×</button>` + html;
+  pop.innerHTML = (compact ? "" : `<button class="x" aria-label="Schließen">×</button>`) + html;
+  pop.classList.toggle("compact", compact);
   pop.hidden = false;
-  pop.querySelector(".x").onclick = closePopup;
+  if (!compact) pop.querySelector(".x").onclick = e => { e.stopPropagation(); closePopup(); };
 
+  // Auswahlrahmen: um den Pfeil (Quadrat) oder um den Wolkenblock / die Schichtzelle
+  const b = opt.box || { x: ax - (kind === "p" ? 13 : 16), y: ay - (kind === "p" ? 13 : 16), w: kind === "p" ? 26 : 32, h: kind === "p" ? 26 : 32 };
   const pw = pop.offsetWidth, ph = pop.offsetHeight;
-  const gap = 26;
-  let px = ax + gap; let side = "r";
-  if (px + pw > LAYOUT.totalW - 4) { px = ax - gap - pw; side = "l"; }
-  if (px < 2) { px = 2; }
-  let py = clamp(ay - ph / 2, 2, LAYOUT.H - ph - 2);
+  const gap = 18;
+  let px = b.x + b.w + gap, side = "r";
+  if (px + pw > LAYOUT.totalW - 4) { px = b.x - gap - pw; side = "l"; }
+  if (px < 2) px = 2;
+  const py = clamp(ay - ph / 2, 2, LAYOUT.H - ph - 2);
   pop.style.left = px + "px"; pop.style.top = py + "px";
-
-  // optische Verbindung: Rahmen um den Pfeil, gestrichelte Spalte, Linie zum Fenster
-  const box = kind === "p" ? 13 : 16;
-  const ex = side === "r" ? px : px + pw;
-  const ey = clamp(ay, py + 10, py + ph - 10);
-  const sx = side === "r" ? ax + box : ax - box;
+  const ex = side === "r" ? px : px + pw, ey = clamp(ay, py + 10, py + ph - 10);
+  const sx = side === "r" ? b.x + b.w : b.x;
   document.getElementById("sel").innerHTML =
     `<line x1="${ax}" y1="0" x2="${ax}" y2="${LAYOUT.H}" stroke="#555" stroke-dasharray="3 3" stroke-width="1"/>
-     <rect x="${ax - box}" y="${ay - box}" width="${box * 2}" height="${box * 2}" rx="5" fill="none" stroke="#111" stroke-width="2.2"/>
-     <rect x="${ax - box + 2.2}" y="${ay - box + 2.2}" width="${box * 2 - 4.4}" height="${box * 2 - 4.4}" rx="3.5" fill="none" stroke="#fff" stroke-width="1.2"/>
+     <rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="5" fill="none" stroke="#111" stroke-width="2.2"/>
+     <rect x="${b.x + 2.2}" y="${b.y + 2.2}" width="${Math.max(0, b.w - 4.4)}" height="${Math.max(0, b.h - 4.4)}" rx="3.5" fill="none" stroke="#fff" stroke-width="1.2"/>
      <line x1="${sx}" y1="${ay}" x2="${ex}" y2="${ey}" stroke="#0b2e59" stroke-width="2"/>`;
+}
+
+// Ziel-Element → Popup-Argumente
+function popupFor(t, compact) {
+  const i = +t.dataset.i, kind = t.dataset.k, x = LAYOUT.cx(i);
+  if (kind === "p") { const z = +t.dataset.z; openPopup("p", i, z, x, LAYOUT.yz(z), { compact }); }
+  else if (kind === "a") openPopup("a", i, null, x, LAYOUT.yAdir + 14, { compact });
+  else if (kind === "c") {
+    const z0 = +t.dataset.z0, z1 = +t.dataset.z1, y1 = LAYOUT.yz(z1), y0 = LAYOUT.yz(z0);
+    const bx = +t.getAttribute("x"), bw = +t.getAttribute("width");
+    openPopup("c", i, null, x, (y0 + y1) / 2, { compact, z0, z1, o: +t.dataset.o, box: { x: bx - 2, y: y1 - 2, w: bw + 4, h: y0 - y1 + 4 } });
+  } else if (kind === "l") {
+    const yy = +t.dataset.y, bx = +t.getAttribute("x"), bw = +t.getAttribute("width");
+    openPopup("l", i, null, x, yy + LAYOUT_ROWH / 2, { compact, l: t.dataset.l, box: { x: bx, y: yy - 2, w: bw, h: LAYOUT_ROWH + 4 } });
+  } else openPopup("s", i, null, x, LAYOUT.yDir + 15, { compact });
 }
 
 $("chartWrap").addEventListener("click", e => {
   const t = e.target.closest("[data-k]");
   if (!t) { if (!e.target.closest("#popup")) closePopup(); return; }
-  const i = +t.dataset.i, kind = t.dataset.k;
-  if (kind === "p") {
-    const z = +t.dataset.z;
-    openPopup("p", i, z, LAYOUT.cx(i), LAYOUT.yz(z));
-  } else if (kind === "a") {
-    openPopup("a", i, null, LAYOUT.cx(i), LAYOUT.yAdir + 14);
-  } else {
-    openPopup("s", i, null, LAYOUT.cx(i), LAYOUT.yDir + 15);
-  }
+  popupFor(t, false); PINNED = true;
 });
+// Darüberfahren mit der Maus: kurze Info, solange kein Fenster angeheftet ist
+let HOVER_EL = null;
+$("chartWrap").addEventListener("pointerover", e => {
+  if (e.pointerType !== "mouse" || PINNED) return;
+  const t = e.target.closest("[data-k]");
+  if (!t || t === HOVER_EL) return;
+  HOVER_EL = t; popupFor(t, true);
+});
+$("chartWrap").addEventListener("pointerout", e => {
+  if (e.pointerType !== "mouse" || PINNED) return;
+  const to = e.relatedTarget && e.relatedTarget.closest ? e.relatedTarget.closest("[data-k]") : null;
+  if (to) return;
+  HOVER_EL = null; $("popup").hidden = true; const s = document.getElementById("sel"); if (s) s.innerHTML = "";
+});
+
 
 /* ===================== Kopf, Tage, Info, Legende ===================== */
 function setStatus(t, err) { const s = $("status"); s.textContent = t; s.className = err ? "err" : ""; s.style.display = t ? "" : "none"; }
@@ -726,19 +793,27 @@ function setupDays() {
   const ri = document.createElement("span"); ri.id = "runinfo"; nav.appendChild(ri);
 }
 
+function infoHtml(withClose) {
+  const row = (k, v) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`;
+  let h = (withClose ? `<button class="btn close" id="infoClose">Schließen</button>` : "") + `<h2>${esc(SITE.name)}</h2>`;
+  if (SITE.info) h += `<table>${Object.entries(SITE.info).map(([k, v]) => row(k, v)).join("")}</table>`;
+  if (SITE.gelaende) h += `<h3>Fluggelände</h3><table>${Object.entries(SITE.gelaende).map(([k, v]) => row(k, v)).join("")}</table>`;
+  if (SITE.landing && SITE.landing.length) {
+    h += `<h3>Landeplätze</h3><table>` + SITE.landing.map(l =>
+      `<tr><td>${esc(l.name)}<br>${l.alt} m</td><td>${esc(l.text)}<br><a href="${navUrl(l.lat, l.lon)}" target="_blank" rel="noopener">Navigation</a></td></tr>`).join("") + `</table>`;
+  }
+  h += `<p><a href="${navUrl(SITE.lat, SITE.lon)}" target="_blank" rel="noopener">Navigation zum Startplatz</a> (${SITE.lat.toFixed(5)}, ${SITE.lon.toFixed(5)})</p>`;
+  if (SITE.dhvUrl) h += `<p><a href="${SITE.dhvUrl}" target="_blank" rel="noopener">Gelände in der DHV-Datenbank öffnen</a></p>`;
+  h += `<div class="src">Quelle: DHV-Geländedatenbank (private Nutzung). Angaben ohne Gewähr – vor Ort Infotafeln und einheimische Piloten beachten.</div>`;
+  return h;
+}
+
+// Großer Bildschirm: Info dauerhaft links. Handy/Tablet: Info nur über den i-Knopf.
 function setupInfo() {
+  if (SITE.info) $("side").innerHTML = infoHtml(false);
+  else document.body.classList.add("noside");
   $("btnInfo").onclick = () => {
-    const row = (k, v) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`;
-    let h = `<button class="btn close" id="infoClose">Schließen</button><h2>${esc(SITE.name)}</h2>`;
-    if (SITE.info) h += `<table>${Object.entries(SITE.info).map(([k, v]) => row(k, v)).join("")}</table>`;
-    if (SITE.gelaende) h += `<h3>Fluggelände</h3><table>${Object.entries(SITE.gelaende).map(([k, v]) => row(k, v)).join("")}</table>`;
-    if (SITE.landing && SITE.landing.length) {
-      h += `<h3>Landeplätze</h3><table>` + SITE.landing.map(l =>
-        `<tr><td>${esc(l.name)}<br>${l.alt} m</td><td>${esc(l.text)}<br><a href="${navUrl(l.lat, l.lon)}" target="_blank" rel="noopener">Navigation</a></td></tr>`).join("") + `</table>`;
-    }
-    if (SITE.dhvUrl) h += `<p><a href="${SITE.dhvUrl}" target="_blank" rel="noopener">Gelände in der DHV-Datenbank öffnen</a></p>`;
-    h += `<div class="src">Quelle: DHV-Geländedatenbank (private Nutzung). Angaben ohne Gewähr – vor Ort Infotafeln und einheimische Piloten beachten.</div>`;
-    $("infoCard").innerHTML = h; $("infoPanel").hidden = false;
+    $("infoCard").innerHTML = infoHtml(true); $("infoPanel").hidden = false;
     $("infoClose").onclick = () => $("infoPanel").hidden = true;
   };
   $("infoPanel").onclick = e => { if (e.target.id === "infoPanel") $("infoPanel").hidden = true; };
@@ -763,7 +838,8 @@ function setupLegend() {
     Zweite Meinung aus AROME Austria (GeoSphere, 2,5 km, etwa 2,5 Tage) bzw. AROME France HD (1,3 km): Wind, Böen und Richtung 10 m über dem Modellgelände.
     Das ist Bodenwind, nicht Wind auf Startplatzhöhe. AROME trifft lokale Hang- und Talwinde und die Böen oft besser als ICON-D2. Nach dem Ende der AROME-Vorhersage fehlen diese Zeilen.
     <h3>Wolken im Höhenprofil</h3>
-    Wolkendichte je Höhe aus dem Modell, angeglichen an die Bedeckung mit tiefen, mittleren und hohen Wolken (Zeilen T/M/H).
+    Bedeckung in Achteln je Höhe (weiß = weniger als 1/8, schwarz = 8/8), angeglichen an die Bedeckung mit tiefen, mittleren und hohen Wolken (Zeilen T/M/H).
+    Fährst du mit der Maus über Wolken, Schichten oder Pfeile, erscheint eine kurze Info. Ein Klick öffnet alle Werte.
     <h3>Daten</h3>
     DWD ICON-D2 (2 km, 48 h) über Open-Meteo, danach automatisch ICON-EU (7 km, bis Tag 5) und ICON-Global (13 km, bis Tag 7). Je weiter in der Zukunft, desto gröber das Modell und unsicherer die Vorhersage.
     Die Druckflächen 925, 900 und 800 hPa interpoliert Open-Meteo bei ICON-D2.
