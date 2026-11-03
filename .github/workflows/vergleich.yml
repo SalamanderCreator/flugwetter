@@ -1,0 +1,42 @@
+name: Vergleich Prognose vs. Messung
+
+on:
+  schedule:
+    - cron: "15 4 * * *"              # 05:15 MEZ: Prognosen für heute sichern
+    - cron: "50 6,10,14,18 * * *"     # 07:50, 11:50, 15:50, 19:50 MEZ: Messwerte der letzten 8 h sichern
+  workflow_dispatch:                   # von Hand starten (macht beides)
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vergleich
+  cancel-in-progress: false
+
+jobs:
+  sammeln:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Prognosen sichern
+        if: github.event.schedule == '15 4 * * *' || github.event_name == 'workflow_dispatch'
+        run: python vergleich/sammeln.py prognose
+
+      - name: Messwerte sichern
+        if: github.event.schedule != '15 4 * * *'
+        run: python vergleich/sammeln.py messung
+
+      - name: Daten speichern
+        run: |
+          git config user.name "flugwetter-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          git diff --cached --quiet && exit 0
+          git commit -m "Vergleichsdaten $(date -u +%Y-%m-%d_%H%M)"
+          git pull --rebase
+          git push
