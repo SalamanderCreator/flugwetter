@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vergleich Prognose vs. Messung – Markbachjoch</title>
+<style>
+  body { margin:0; padding:12px; font-family:"Roboto Condensed","Arial Narrow",system-ui,sans-serif; color:#1d1d1f; }
+  h1 { font-size:19px; margin:0 0 2px; } h2 { font-size:16px; margin:18px 0 6px; }
+  .muted { color:#6b6b70; font-size:13px; line-height:1.45; max-width:900px; }
+  table { border-collapse:collapse; font-size:14px; margin-top:4px; }
+  th, td { padding:4px 8px; border-bottom:1px solid #e6e6e6; text-align:right; white-space:nowrap; }
+  th:first-child, td:first-child { text-align:left; }
+  th { background:#f4f4f6; font-weight:600; }
+  tr.obs td { background:#eef6ff; font-weight:600; }
+  .best { background:#d9f5d9; font-weight:700; }
+  .wrap { overflow-x:auto; }
+  select { font:inherit; padding:4px 6px; }
+  a { color:#0b5cad; }
+  #status { color:#b00020; }
+</style>
+</head>
+<body>
+<h1>Prognose vs. Messung · Markbachjoch Startplatz 1</h1>
+<div class="muted">Holfuy-Station „FS Wildschönau“ (1450 m) gegen die Modellprognose vom selben Morgen (05:15 Uhr). Ausgewertet werden die Stunden 7–17 Uhr.
+  <a href="./">← Flugwetter</a></div>
+<div id="status"></div>
+
+<h2>Gesamt</h2>
+<div class="wrap"><table id="sum"></table></div>
+<div class="muted">Mittlere Abweichung zur Messung in km/h bzw. °C, kleiner ist besser. „Böen ±“: positiv heißt, das Modell rechnet zu starke Böen.
+  Die Richtung wird nur gewertet, wenn mindestens 3 km/h Wind gemessen wurden. Der beste Wert je Spalte ist grün.</div>
+
+<h2>Tagesverlauf <select id="day"></select></h2>
+<div class="wrap"><table id="tab"></table></div>
+<div class="muted">Je Zelle: Wind / Böen / Richtung. Messung: Mittel bzw. Höchstwert der 15-Minuten-Werte der vorangehenden Stunde.
+  Modelle: Wind 10 m über ihrem Modellgelände. Die Station steht auf 1450 m, die Modellgelände liegen je nach Auflösung höher oder tiefer.</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const H0 = 7, H1 = 17;
+const DIRS = ["N","NNO","NO","ONO","O","OSO","SO","SSO","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+const dn = d => d == null || isNaN(d) ? "–" : DIRS[Math.round(((d % 360) + 360) % 360 / 22.5) % 16];
+
+function parseCsv(txt) {
+  const lines = txt.trim().split(/\r?\n/); const head = lines.shift().split(",");
+  return lines.map(l => { const v = l.split(","); const o = {}; head.forEach((h, i) => o[h] = v[i]); return o; });
+}
+const num = v => (v === "" || v == null) ? null : +v;
+const angDiff = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
+
+// Messungen je volle Stunde: Wind = Mittel, Böen = Maximum, Richtung = Vektormittel der 4 Werte (H-45 … H:00)
+function hourlyObs(mess) {
+  const by = {};
+  for (const m of mess) {
+    const [d, t] = m.zeit.split("T"); let [hh, mm] = t.split(":").map(Number);
+    const dt = new Date(d + "T00:00:00"); dt.setHours(hh, mm);
+    if (mm !== 0) dt.setHours(dt.getHours() + 1, 0);        // 06:15 … 07:00 gehört zu 07 Uhr
+    const key = dt.getFullYear() + "-" + String(dt.getMonth() + 1).padStart(2, "0") + "-" + String(dt.getDate()).padStart(2, "0") + "T" + String(dt.getHours()).padStart(2, "0") + ":00";
+    (by[key] = by[key] || []).push(m);
+  }
+  const out = {};
+  for (const [k, arr] of Object.entries(by)) {
+    const w = arr.map(a => num(a.wind)).filter(v => v != null);
+    const g = arr.map(a => num(a.boeen)).filter(v => v != null);
+    const t = arr.map(a => num(a.temp)).filter(v => v != null);
+    let u = 0, v = 0;
+    arr.forEach(a => { const s = num(a.wind) || 0.1, r = num(a.richtung); if (r == null) return; u += s * Math.sin(r * Math.PI / 180); v += s * Math.cos(r * Math.PI / 180); });
+    out[k] = { n: arr.length, wind: w.length ? w.reduce((a, b) => a + b) / w.length : null, boeen: g.length ? Math.max(...g) : null,
+               richtung: (u || v) ? (Math.atan2(u, v) * 180 / Math.PI + 360) % 360 : null, temp: t.length ? t.reduce((a, b) => a + b) / t.length : null };
+  }
+  return out;
+}
+
+async function load() {
+  let prog, mess;
+  try {
+    [prog, mess] = await Promise.all(["data/prognosen.csv", "data/messungen.csv"].map(async u => {
+      const r = await fetch(u + "?t=" + Date.now()); if (!r.ok) throw new Error(u + " fehlt noch"); return parseCsv(await r.text());
+    }));
+  } catch (e) { $("status").textContent = "Noch keine Daten: " + e.message + ". Die Sammlung startet mit dem nächsten Lauf."; return; }
+  const obs = hourlyObs(mess);
+  const models = [...new Set(prog.map(p => p.modell))].sort();
+  const P = {}; prog.forEach(p => P[p.modell + "|" + p.zeit] = p);
+  const inRange = k => { const h = +k.slice(11, 13); return h >= H0 && h <= H1; };
+  const keys = Object.keys(obs).filter(k => inRange(k) && obs[k].n >= 3).sort();
+
+  // Gesamtstatistik
+  const stats = models.map(m => {
+    const s = { m, n: 0, w: 0, g: 0, gb: 0, d: 0, dn: 0, t: 0, tn: 0 };
+    for (const k of keys) {
+      const p = P[m + "|" + k], o = obs[k]; if (!p) continue;
+      const pw = num(p.wind), pg = num(p.boeen), pd = num(p.richtung), pt = num(p.temp);
+      if (pw == null || o.wind == null) continue;
+      s.n++; s.w += Math.abs(pw - o.wind);
+      if (pg != null && o.boeen != null) { s.g += Math.abs(pg - o.boeen); s.gb += pg - o.boeen; }
+      if (pd != null && o.richtung != null && o.wind >= 3) { s.d += angDiff(pd, o.richtung); s.dn++; }
+      if (pt != null && o.temp != null) { s.t += Math.abs(pt - o.temp); s.tn++; }
+    }
+    return { m, n: s.n, w: s.n ? s.w / s.n : null, g: s.n ? s.g / s.n : null, gb: s.n ? s.gb / s.n : null,
+             d: s.dn ? s.d / s.dn : null, dn: s.dn, t: s.tn ? s.t / s.tn : null };
+  }).filter(s => s.n);
+  const best = k => Math.min(...stats.map(s => s[k] == null ? Infinity : Math.abs(s[k])));
+  const bw = best("w"), bg = best("g"), bgb = best("gb"), bd = best("d"), bt = best("t");
+  const cell = (v, b, f = 1, sign = false) => v == null ? "<td>–</td>" : `<td class="${Math.abs(v) === b ? "best" : ""}">${sign && v > 0 ? "+" : ""}${v.toFixed(f)}</td>`;
+  const days = [...new Set(keys.map(k => k.slice(0, 10)))];
+  $("sum").innerHTML = `<tr><th>Modell</th><th>Stunden</th><th>Wind</th><th>Böen</th><th>Böen ±</th><th>Richtung °</th><th>Temp.</th></tr>` +
+    stats.sort((a, b) => a.g - b.g).map(s => `<tr><td>${s.m}</td><td>${s.n}</td>${cell(s.w, bw)}${cell(s.g, bg)}${cell(s.gb, bgb, 1, true)}${cell(s.d, bd, 0)}${cell(s.t, bt)}</tr>`).join("") +
+    `<tr><td colspan="7" style="text-align:left;color:#6b6b70">${days.length} Tag(e), ${keys.length} Stunden mit Messwerten</td></tr>`;
+
+  // Tagesverlauf
+  const sel = $("day");
+  sel.innerHTML = days.slice().reverse().map(d => `<option>${d}</option>`).join("");
+  const showDay = d => {
+    const ks = keys.filter(k => k.startsWith(d));
+    const fmt = (w, g, r) => `${w == null ? "–" : Math.round(w)} / ${g == null ? "–" : Math.round(g)} / ${dn(r)}`;
+    let h = `<tr><th>Uhr</th><th>Messung</th>${models.map(m => `<th>${m}</th>`).join("")}</tr>`;
+    for (const k of ks) {
+      const o = obs[k];
+      h += `<tr><td>${k.slice(11, 13)}</td><td style="background:#eef6ff;font-weight:600">${fmt(o.wind, o.boeen, o.richtung)}</td>` +
+        models.map(m => { const p = P[m + "|" + k]; return `<td>${p ? fmt(num(p.wind), num(p.boeen), num(p.richtung)) : "–"}</td>`; }).join("") + `</tr>`;
+    }
+    $("tab").innerHTML = h;
+  };
+  sel.onchange = () => showDay(sel.value);
+  if (days.length) showDay(days[days.length - 1]);
+}
+load();
+</script>
+</body>
+</html>

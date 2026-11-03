@@ -198,6 +198,32 @@ async function fetchModel(names) {
   }
   throw new Error(reason);
 }
+// AROME (GeoSphere Austria, sonst Météo-France HD): nur Bodenwerte
+const AROME_MODELS = [["geosphere_arome_austria", "AROME Austria"], ["meteofrance_arome_france_hd", "AROME France HD"]];
+async function fetchArome() {
+  const map = {};
+  for (const [id, name] of AROME_MODELS) {
+    try {
+      const u = "https://api.open-meteo.com/v1/forecast?latitude=" + SITE.lat + "&longitude=" + SITE.lon +
+        "&elevation=nan&models=" + id + "&timezone=auto&forecast_days=" + CONFIG.days +
+        "&wind_speed_unit=kmh&hourly=wind_speed_10m,wind_gusts_10m,wind_direction_10m,temperature_2m";
+      const j = await (await fetch(u)).json();
+      if (j.error) continue;
+      const h = j.hourly;
+      h.time.forEach((t, i) => {
+        if (map[t] || h.wind_speed_10m[i] == null) return;
+        map[t] = { model: name, elev: j.elevation, ws: h.wind_speed_10m[i], gust: h.wind_gusts_10m[i] ?? h.wind_speed_10m[i],
+                   wd: h.wind_direction_10m[i], T: h.temperature_2m[i] };
+      });
+    } catch (e) { /* AROME ist optional */ }
+  }
+  return map;
+}
+function demoArome() {
+  const map = {}; const d = makeDemo("d2");
+  d.hourly.time.forEach((t, i) => { if (i < 60) map[t] = { model: "AROME Austria", elev: 1117, ws: 2 + (i % 24) / 6, gust: 5 + (i % 24) / 3, wd: 160, T: d.hourly.temperature_2m[i] }; });
+  return map;
+}
 async function fetchRun() {
   try {
     const r = await fetch("https://api.open-meteo.com/data/dwd_icon_d2/static/meta.json");
@@ -409,7 +435,7 @@ function arrowSvg(x, y, ws, wd, size, fill, stroke, sw, attrs = "") {
 }
 
 /* ===================== Zeichnen ===================== */
-let RECS = [], DAYS = [], CUR = 0, RUN = null, LAYOUT = null;
+let RECS = [], DAYS = [], CUR = 0, RUN = null, LAYOUT = null, AROME = {};
 
 function render() {
   closePopup();
@@ -440,7 +466,10 @@ function render() {
   const yProfTop = yRain + 18;
   const profH = mobile ? 340 : 440;
   const yProfBot = yProfTop + profH;
-  const yDir = yProfBot + 6, yWind = yDir + 34, yGust = yWind + 26, yTs = yGust + 26, yBase = yTs + 24, yTh = yBase + 24, H = yTh + 24;
+  const yDir = yProfBot + 6, yWind = yDir + 34, yGust = yWind + 26, yTs = yGust + 26, yBase = yTs + 24, yTh = yBase + 24;
+  const hasArome = hrs.some(r => AROME[r.time]);
+  const yAhead = yTh + 42, yAdir = yAhead + 6, yAwind = yAdir + 30, yAgust = yAwind + 26;
+  const H = hasArome ? yAgust + 28 : yTh + 24;
 
   // Höhenbereich
   const ground = Math.min(...hrs.map(r => r.ground));
@@ -564,6 +593,26 @@ function render() {
     o.push(`<text x="${cx(i)}" y="${yTh + 15}" text-anchor="middle" font-size="${mobile ? 10 : 14}" fill="${r.base && !r.base.cumulus ? "#1565c0" : "#333"}" pointer-events="none">${r.base ? r.base.thermik : "–"}</text>`);
   });
 
+  // AROME-Zeilen (Bodenwind eines zweiten, sehr hoch aufgelösten Modells)
+  if (hasArome) {
+    const mod = [...new Set(hrs.map(r => AROME[r.time] && AROME[r.time].model).filter(Boolean))].join(" / ");
+    o.push(`<line x1="${left}" y1="${yAhead - 16}" x2="${totalW - right}" y2="${yAhead - 16}" stroke="#ddd"/>`);
+    o.push(`<text x="${left + 2}" y="${yAhead}" font-size="12" fill="#555">Zweite Meinung: ${esc(mod)} – Wind am Modellboden, nicht auf Startplatzhöhe</text>`);
+    lbl("AROME", yAdir + 19, mobile ? 10 : 12); lbl("Wind", yAwind + 17); lbl(mobile ? "Böen" : "Max Wind", yAgust + 17);
+    hrs.forEach((r, i) => {
+      const a = AROME[r.time]; if (!a || a.ws == null) return;
+      const x = left + i * colW + 1.5, w = colW - 3, fs = mobile ? 11 : 14;
+      const wf = windColor(a.ws), gf = gustColor(a.gust);
+      o.push(`<rect x="${x}" y="${yAdir}" width="${w}" height="28" fill="transparent" class="hit" data-k="a" data-i="${i}"/>`);
+      o.push(arrowSvg(cx(i), yAdir + 14, a.ws, a.wd, mobile ? 16 : 21, wf, gf, 2, `class="hit" data-k="a" data-i="${i}"`));
+      o.push(`<rect x="${x}" y="${yAwind}" width="${w}" height="23" fill="${wf}" class="hit" data-k="a" data-i="${i}"/>`);
+      o.push(`<text x="${cx(i)}" y="${yAwind + 16.5}" text-anchor="middle" font-size="${fs}" fill="${textOn(wf)}" pointer-events="none">${Math.round(a.ws)}</text>`);
+      o.push(`<rect x="${x}" y="${yAgust}" width="${w}" height="23" fill="${gf}" class="hit" data-k="a" data-i="${i}"/>`);
+      o.push(`<text x="${cx(i)}" y="${yAgust + 16.5}" text-anchor="middle" font-size="${fs}" fill="${textOn(gf)}" pointer-events="none">${Math.round(a.gust)}</text>`);
+    });
+  }
+  LAYOUT.yAdir = yAdir;
+
   o.push(`<g id="sel" pointer-events="none"></g></svg>`);
   $("chart").innerHTML = o.join("");
 }
@@ -588,6 +637,15 @@ function openPopup(kind, i, z, ax, ay) {
       <div>Bewölkung</div><div>${f1(p.cc)} %</div>
       <div>Luftdruck</div><div>${f1(p.p)} hPa</div></div>
       <div class="note">${r.model} · Wind und Temperatur auf gegebener Höhe, ohne Talwind. Böen geschätzt aus dem Böenanteil am Modellboden und der Thermikhöhe.</div>`;
+  } else if (kind === "a") {
+    const a = AROME[r.time];
+    html = `<div class="t">${esc(a.model)} ${hh}<span>Modellboden ${Math.round(a.elev)} m</span></div>
+      <div class="g"><div>Wind</div><div><b>${f1(a.ws)} km/h</b></div>
+      <div>Böen</div><div><b>${f1(a.gust)} km/h</b></div>
+      <div>Richtung</div><div>${f1(a.wd)}° (${dirName(a.wd)})</div>
+      <div>Temperatur</div><div>${a.T != null ? a.T.toFixed(1) : "–"} °C</div></div>
+      <div class="note">Wind 10 m über dem Modellgelände (${Math.round(a.elev)} m), nicht auf Startplatzhöhe (${SITE.alt} m).
+      AROME bildet lokale Hang- und Talwinde oft besser ab als ICON-D2.</div>`;
   } else {
     const s = r.start;
     html = `<div class="t">Startplatz ${hh}<span>${SITE.alt.toLocaleString("de-DE")} m</span></div>
@@ -633,6 +691,8 @@ $("chartWrap").addEventListener("click", e => {
   if (kind === "p") {
     const z = +t.dataset.z;
     openPopup("p", i, z, LAYOUT.cx(i), LAYOUT.yz(z));
+  } else if (kind === "a") {
+    openPopup("a", i, null, LAYOUT.cx(i), LAYOUT.yAdir + 14);
   } else {
     openPopup("s", i, null, LAYOUT.cx(i), LAYOUT.yDir + 15);
   }
@@ -699,6 +759,9 @@ function setupLegend() {
     <b>Thermik</b>: So hoch steigt ein trocken aufsteigendes Luftpaket vom Modellboden, höchstens bis zur Basis.
     Die Überhitzung des Luftpakets hängt von der Sonneneinstrahlung ab: bis ${CONFIG.ueberhitzung} K ab ${CONFIG.radFull} W/m², ohne Sonne keine.
     Eine <span style="color:#1565c0">blaue Thermikzahl</span> bedeutet Blauthermik: Die Thermik endet unter der Basis, es bilden sich keine Wolken.
+    <h3>AROME (unterste Zeilen)</h3>
+    Zweite Meinung aus AROME Austria (GeoSphere, 2,5 km, etwa 2,5 Tage) bzw. AROME France HD (1,3 km): Wind, Böen und Richtung 10 m über dem Modellgelände.
+    Das ist Bodenwind, nicht Wind auf Startplatzhöhe. AROME trifft lokale Hang- und Talwinde und die Böen oft besser als ICON-D2. Nach dem Ende der AROME-Vorhersage fehlen diese Zeilen.
     <h3>Wolken im Höhenprofil</h3>
     Wolkendichte je Höhe aus dem Modell, angeglichen an die Bedeckung mit tiefen, mittleren und hohen Wolken (Zeilen T/M/H).
     <h3>Daten</h3>
@@ -714,9 +777,10 @@ async function init() {
   setupHeader(); setupInfo(); setupLegend();
   try {
     let d2 = null, eu = null, gl = null;
-    if (DEMO) { d2 = makeDemo("d2"); eu = makeDemo("eu"); gl = makeDemo("gl"); }
+    if (DEMO) { d2 = makeDemo("d2"); eu = makeDemo("eu"); gl = makeDemo("gl"); AROME = demoArome(); }
     else {
-      const [a, b, c, run] = await Promise.allSettled([fetchModel(CONFIG.modelsD2), fetchModel(CONFIG.modelsEU), fetchModel(CONFIG.modelsGL), fetchRun()]);
+      const [a, b, c, run, ar] = await Promise.allSettled([fetchModel(CONFIG.modelsD2), fetchModel(CONFIG.modelsEU), fetchModel(CONFIG.modelsGL), fetchRun(), fetchArome()]);
+      AROME = ar.status === "fulfilled" ? ar.value : {};
       d2 = a.status === "fulfilled" ? a.value : null;
       eu = b.status === "fulfilled" ? b.value : null;
       gl = c.status === "fulfilled" ? c.value : null;
