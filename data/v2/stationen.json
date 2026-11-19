@@ -99,25 +99,29 @@
   "station": "11265"
  },
  "hol_1000": {
-  "hoehe": null,
+  "hoehe": 1760,
+  "hoehe_versucht": true,
   "lat": 45.76923,
   "lon": 10.86437,
   "station": "1000"
  },
  "hol_1061": {
-  "hoehe": null,
+  "hoehe": 1620,
+  "hoehe_versucht": true,
   "lat": 47.69155,
   "lon": 12.88368,
   "station": "1061"
  },
  "hol_1063": {
-  "hoehe": null,
+  "hoehe": 1315,
+  "hoehe_versucht": true,
   "lat": 47.82717,
   "lon": 8.03332,
   "station": "1063"
  },
  "hol_1125": {
-  "hoehe": null,
+  "hoehe": 1619,
+  "hoehe_versucht": true,
   "lat": 46.67731,
   "lon": 7.26095,
   "station": "1125"
@@ -129,349 +133,407 @@
   "station": "1186"
  },
  "hol_1221": {
-  "hoehe": null,
+  "hoehe": 1510,
+  "hoehe_versucht": true,
   "lat": 47.22443,
   "lon": 9.23846,
   "station": "1221"
  },
  "hol_1247": {
-  "hoehe": null,
+  "hoehe": 500,
+  "hoehe_versucht": true,
   "lat": 48.75276,
   "lon": 9.81533,
   "station": "1247"
  },
  "hol_1248": {
-  "hoehe": null,
+  "hoehe": 749,
+  "hoehe_versucht": true,
   "lat": 47.51361,
   "lon": 12.43212,
   "station": "1248"
  },
  "hol_1266": {
-  "hoehe": null,
+  "hoehe": 2100,
+  "hoehe_versucht": true,
   "lat": 47.28171,
   "lon": 12.29148,
   "station": "1266"
  },
  "hol_1322": {
-  "hoehe": null,
+  "hoehe": 1180,
+  "hoehe_versucht": true,
   "lat": 47.50688,
   "lon": 10.3995,
   "station": "1322"
  },
  "hol_1343": {
-  "hoehe": null,
+  "hoehe": 1555,
+  "hoehe_versucht": true,
   "lat": 47.66365,
   "lon": 11.52303,
   "station": "1343"
  },
  "hol_1345": {
-  "hoehe": null,
+  "hoehe": 620,
+  "hoehe_versucht": true,
   "lat": 49.3269,
   "lon": 12.86913,
   "station": "1345"
  },
  "hol_1376": {
-  "hoehe": null,
+  "hoehe": 535,
+  "hoehe_versucht": true,
   "lat": 50.16253,
   "lon": 11.52605,
   "station": "1376"
  },
  "hol_1404": {
-  "hoehe": null,
+  "hoehe": 544,
+  "hoehe_versucht": true,
   "lat": 49.62063,
   "lon": 7.94166,
   "station": "1404"
  },
  "hol_1423": {
-  "hoehe": null,
+  "hoehe": 1768,
+  "hoehe_versucht": true,
   "lat": 47.27511,
   "lon": 10.3642,
   "station": "1423"
  },
  "hol_1485": {
-  "hoehe": null,
+  "hoehe": 2100,
+  "hoehe_versucht": true,
   "lat": 47.33237,
   "lon": 11.79462,
   "station": "1485"
  },
  "hol_1541": {
-  "hoehe": null,
+  "hoehe": 943,
+  "hoehe_versucht": true,
   "lat": 48.8014,
   "lon": 13.67213,
   "station": "1541"
  },
  "hol_1545": {
-  "hoehe": null,
+  "hoehe": 1665,
+  "hoehe_versucht": true,
   "lat": 47.46523,
   "lon": 10.20116,
   "station": "1545"
  },
  "hol_1547": {
-  "hoehe": null,
+  "hoehe": 2650,
+  "hoehe_versucht": true,
   "lat": 46.78927,
   "lon": 9.63907,
   "station": "1547"
  },
  "hol_1571": {
-  "hoehe": null,
+  "hoehe": 2890,
+  "hoehe_versucht": true,
   "lat": 46.74282,
   "lon": 9.60307,
   "station": "1571"
  },
  "hol_1638": {
-  "hoehe": null,
+  "hoehe": 1620,
+  "hoehe_versucht": true,
   "lat": 45.99124,
   "lon": 7.74715,
   "station": "1638"
  },
  "hol_1671": {
-  "hoehe": null,
+  "hoehe": 1108,
+  "hoehe_versucht": true,
   "lat": 47.56586,
   "lon": 10.3085,
   "station": "1671"
  },
  "hol_1686": {
-  "hoehe": null,
+  "hoehe": 1105,
+  "hoehe_versucht": true,
   "lat": 47.41131,
   "lon": 13.89338,
   "station": "1686"
  },
  "hol_1689": {
-  "hoehe": null,
+  "hoehe": 2100,
+  "hoehe_versucht": true,
   "lat": 47.25589,
   "lon": 10.67704,
   "station": "1689"
  },
  "hol_1690": {
-  "hoehe": null,
+  "hoehe": 2100,
+  "hoehe_versucht": true,
   "lat": 46.97166,
   "lon": 10.49355,
   "station": "1690"
  },
  "hol_1694": {
-  "hoehe": null,
+  "hoehe": 1250,
+  "hoehe_versucht": true,
   "lat": 47.49212,
   "lon": 10.37085,
   "station": "1694"
  },
  "hol_1796": {
-  "hoehe": null,
+  "hoehe": 1823,
+  "hoehe_versucht": true,
   "lat": 47.48258,
   "lon": 10.54225,
   "station": "1796"
  },
  "hol_1810": {
-  "hoehe": null,
+  "hoehe": 1220,
+  "hoehe_versucht": true,
   "lat": 47.73443,
   "lon": 11.50679,
   "station": "1810"
  },
  "hol_1832": {
-  "hoehe": null,
+  "hoehe": 1278,
+  "hoehe_versucht": true,
   "lat": 47.80483,
   "lon": 13.11422,
   "station": "1832"
  },
  "hol_1862": {
-  "hoehe": null,
+  "hoehe": 1817,
+  "hoehe_versucht": true,
   "lat": 47.46394,
   "lon": 13.29872,
   "station": "1862"
  },
  "hol_1882": {
-  "hoehe": null,
+  "hoehe": 650,
+  "hoehe_versucht": true,
   "lat": 48.67943,
   "lon": 9.83887,
   "station": "1882"
  },
  "hol_1951": {
-  "hoehe": null,
+  "hoehe": 880,
+  "hoehe_versucht": true,
   "lat": 51.27835,
   "lon": 8.59978,
   "station": "1951"
  },
  "hol_1990": {
-  "hoehe": null,
+  "hoehe": 2893,
+  "hoehe_versucht": true,
   "lat": 46.42971,
   "lon": 10.02155,
   "station": "1990"
  },
  "hol_2023": {
-  "hoehe": null,
+  "hoehe": 1522,
+  "hoehe_versucht": true,
   "lat": 47.74251,
   "lon": 13.35143,
   "station": "2023"
  },
  "hol_2043": {
-  "hoehe": null,
+  "hoehe": 795,
+  "hoehe_versucht": true,
   "lat": 48.64086,
   "lon": 8.17131,
   "station": "2043"
  },
  "hol_236": {
-  "hoehe": null,
+  "hoehe": 1020,
+  "hoehe_versucht": true,
   "lat": 47.89866,
   "lon": 13.81839,
   "station": "236"
  },
  "hol_388": {
-  "hoehe": null,
+  "hoehe": 1850,
+  "hoehe_versucht": true,
   "lat": 47.44409,
   "lon": 11.76381,
   "station": "388"
  },
  "hol_424": {
-  "hoehe": null,
+  "hoehe": 1425,
+  "hoehe_versucht": true,
   "lat": 47.72844,
   "lon": 12.63837,
   "station": "424"
  },
  "hol_466": {
-  "hoehe": null,
+  "hoehe": 630,
+  "hoehe_versucht": true,
   "lat": 51.88967,
   "lon": 10.43149,
   "station": "466"
  },
  "hol_480": {
-  "hoehe": null,
+  "hoehe": 830,
+  "hoehe_versucht": true,
   "lat": 49.0365,
   "lon": 12.74732,
   "station": "480"
  },
  "hol_511": {
-  "hoehe": null,
+  "hoehe": 1137,
+  "hoehe_versucht": true,
   "lat": 47.60642,
   "lon": 10.81141,
   "station": "511"
  },
  "hol_533": {
-  "hoehe": null,
+  "hoehe": 1779,
+  "hoehe_versucht": true,
   "lat": 47.39093,
   "lon": 10.84848,
   "station": "533"
  },
  "hol_537": {
-  "hoehe": null,
+  "hoehe": 880,
+  "hoehe_versucht": true,
   "lat": 48.87104,
   "lon": 13.07332,
   "station": "537"
  },
  "hol_571": {
-  "hoehe": null,
+  "hoehe": 1972,
+  "hoehe_versucht": true,
   "lat": 47.07321,
   "lon": 9.26763,
   "station": "571"
  },
  "hol_588": {
-  "hoehe": null,
+  "hoehe": 685,
+  "hoehe_versucht": true,
   "lat": 49.06776,
   "lon": 10.52844,
   "station": "588"
  },
  "hol_604": {
-  "hoehe": null,
+  "hoehe": 1610,
+  "hoehe_versucht": true,
   "lat": 47.76106,
   "lon": 12.55959,
   "station": "604"
  },
  "hol_623": {
-  "hoehe": null,
+  "hoehe": 1200,
+  "hoehe_versucht": true,
   "lat": 47.30376,
   "lon": 8.94319,
   "station": "623"
  },
  "hol_645": {
-  "hoehe": null,
+  "hoehe": 1801,
+  "hoehe_versucht": true,
   "lat": 47.34927,
   "lon": 10.8997,
   "station": "645"
  },
  "hol_665": {
-  "hoehe": null,
+  "hoehe": 1780,
+  "hoehe_versucht": true,
   "lat": 47.22779,
   "lon": 14.16074,
   "station": "665"
  },
  "hol_666": {
   "hoehe": null,
+  "hoehe_versucht": true,
   "lat": 47.21544,
   "lon": 14.84706,
   "station": "666"
  },
  "hol_676": {
-  "hoehe": null,
+  "hoehe": 1510,
+  "hoehe_versucht": true,
   "lat": 47.54662,
   "lon": 10.56447,
   "station": "676"
  },
  "hol_685": {
-  "hoehe": null,
+  "hoehe": 920,
+  "hoehe_versucht": true,
   "lat": 50.50227,
   "lon": 9.94016,
   "station": "685"
  },
  "hol_695": {
-  "hoehe": null,
+  "hoehe": 1285,
+  "hoehe_versucht": true,
   "lat": 47.73362,
   "lon": 14.36657,
   "station": "695"
  },
  "hol_723": {
-  "hoehe": null,
+  "hoehe": 2159,
+  "hoehe_versucht": true,
   "lat": 47.13519,
   "lon": 10.22104,
   "station": "723"
  },
  "hol_738": {
-  "hoehe": null,
+  "hoehe": 1805,
+  "hoehe_versucht": true,
   "lat": 47.47236,
   "lon": 10.643,
   "station": "738"
  },
  "hol_742": {
-  "hoehe": null,
+  "hoehe": 2115,
+  "hoehe_versucht": true,
   "lat": 47.1459,
   "lon": 11.3072,
   "station": "742"
  },
  "hol_751": {
-  "hoehe": null,
+  "hoehe": 1070,
+  "hoehe_versucht": true,
   "lat": 46.71838,
   "lon": 14.67268,
   "station": "751"
  },
  "hol_770": {
-  "hoehe": null,
+  "hoehe": 1000,
+  "hoehe_versucht": true,
   "lat": 47.87268,
   "lon": 14.09257,
   "station": "770"
  },
  "hol_877": {
-  "hoehe": null,
+  "hoehe": 753,
+  "hoehe_versucht": true,
   "lat": 47.31693,
   "lon": 15.85832,
   "station": "877"
  },
  "hol_905": {
-  "hoehe": null,
+  "hoehe": 1750,
+  "hoehe_versucht": true,
   "lat": 47.55974,
   "lon": 10.77982,
   "station": "905"
  },
  "hol_906": {
-  "hoehe": null,
+  "hoehe": 1930,
+  "hoehe_versucht": true,
   "lat": 47.41328,
   "lon": 10.3471,
   "station": "906"
  },
  "hol_931": {
-  "hoehe": null,
+  "hoehe": 1366,
+  "hoehe_versucht": true,
   "lat": 45.65295,
   "lon": 10.81001,
   "station": "931"
  },
  "hol_960": {
-  "hoehe": null,
+  "hoehe": 932,
+  "hoehe_versucht": true,
   "lat": 47.148,
   "lon": 8.53599,
   "station": "960"
