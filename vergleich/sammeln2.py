@@ -143,7 +143,8 @@ def resolve_stations(orte):
     if os.path.exists(path):
         with open(path, encoding="utf-8") as f:
             cache = json.load(f)
-    need = [o for o in orte if o["id"] not in cache]
+    need = [o for o in orte if o["id"] not in cache
+            or (o["quelle"] == "holfuy" and cache[o["id"]].get("hoehe") is None and not cache[o["id"]].get("hoehe_versucht"))]
     arso = dmi_meta = dwd_list = None
     for o in need:
         info = {"lat": o.get("lat"), "lon": o.get("lon"), "hoehe": o.get("hoehe"), "station": o["station"]}
@@ -160,13 +161,14 @@ def resolve_stations(orte):
                     lon, lat = feats[-1]["geometry"]["coordinates"][:2]
                     info.update(lat=lat, lon=lon, hoehe=feats[-1]["properties"].get("stationHeight"))
             elif o["quelle"] == "dwd":
-                dwd_list = dwd_list or parse_dwd_stations(get(DWD_BASE + "wind/now/zehn_now_ff_Beschreibung_Stationen.txt"))
+                dwd_list = dwd_list or parse_dwd_stations(get(DWD_BASE + "wind/now/zehn_now_ff_Beschreibung_Stationen.txt", binary=True).decode("latin-1"))
                 s = dwd_find(dwd_list, o["station"], o.get("lat"), o.get("lon"))
                 if s:
                     info.update(station=s["id"], name_dwd=s["name"], lat=s["lat"], lon=s["lon"], hoehe=s["hoehe"])
             elif o["quelle"] == "holfuy" and not o.get("hoehe"):
+                info["hoehe_versucht"] = True
                 html = get(f"https://holfuy.com/de/weather/{o['station']}")
-                m = re.search(r"(\d{2,4})\s*m\s*\(AMSL\)", html)
+                m = re.search(r"(\d{2,4})\s*m\s*(?:</b>)?\s*\(AMSL\)", html)
                 if m:
                     info["hoehe"] = int(m.group(1))
                 time.sleep(1)

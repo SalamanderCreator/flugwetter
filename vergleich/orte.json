@@ -1824,18 +1824,6 @@
    "land": "DE",
    "region": "Schwarzwald / Südwest",
    "typ": "berg"
-  },
-  {
-   "id": "dwd_wendelstein",
-   "name": "Wendelstein (DWD)",
-   "quelle": "dwd",
-   "station": "Wendelstein",
-   "lat": 47.7,
-   "lon": 12.01,
-   "hoehe": null,
-   "land": "DE",
-   "region": "Bayerische Alpen / Allgäu",
-   "typ": "berg"
   }
  ]
 }

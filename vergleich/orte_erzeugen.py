@@ -160,7 +160,6 @@ OFFIZIELL = [
     {"id": "dwd_wasserkuppe", "name": "Wasserkuppe (DWD)", "quelle": "dwd", "station": "Wasserkuppe", "lat": 50.50, "lon": 9.94, "hoehe": None},
     {"id": "dwd_arber", "name": "Großer Arber (DWD)", "quelle": "dwd", "station": "Großer Arber", "lat": 49.11, "lon": 13.13, "hoehe": None},
     {"id": "dwd_feldberg", "name": "Feldberg/Schwarzwald (DWD)", "quelle": "dwd", "station": "Feldberg/Schwarzwald", "lat": 47.87, "lon": 8.00, "hoehe": None},
-    {"id": "dwd_wendelstein", "name": "Wendelstein (DWD)", "quelle": "dwd", "station": "Wendelstein", "lat": 47.70, "lon": 12.01, "hoehe": None},
 ]
 LAND_OFF = {"geosphere": "AT", "arso": "SI", "dmi": "DK", "dwd": "DE"}
 
