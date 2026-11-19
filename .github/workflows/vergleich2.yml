@@ -1,0 +1,52 @@
+name: Vergleich 2 – viele Orte
+
+on:
+  schedule:
+    - cron: "15 4 * * *"    # 05:15 MEZ: Prognosen heute, morgen, übermorgen
+    - cron: "15 6 * * *"    # 07:15 MEZ: fehlende Modelle nachholen
+    - cron: "15 16 * * *"   # 17:15 MEZ: Prognosen morgen, übermorgen
+    - cron: "40 * * * *"    # stündlich: Messwerte
+  workflow_dispatch:
+    inputs:
+      modus:
+        description: "prognose-morgen | prognose-abend | messung-alle"
+        default: "messung-alle"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vergleich-daten
+  cancel-in-progress: false
+
+jobs:
+  sammeln:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Daten sammeln
+        run: |
+          case "${{ github.event.schedule }}" in
+            "15 4 * * *")  python vergleich/sammeln2.py prognose morgen ;;
+            "15 6 * * *")  python vergleich/sammeln2.py prognose nachtrag ;;
+            "15 16 * * *") python vergleich/sammeln2.py prognose abend ;;
+            "40 * * * *")  python vergleich/sammeln2.py messung ;;
+            *)
+              case "${{ github.event.inputs.modus }}" in
+                prognose-morgen) python vergleich/sammeln2.py prognose morgen ;;
+                prognose-abend)  python vergleich/sammeln2.py prognose abend ;;
+                *)               python vergleich/sammeln2.py messung alle ;;
+              esac ;;
+          esac
+      - name: Speichern
+        run: |
+          git config user.name "flugwetter-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/v2
+          git diff --cached --quiet && exit 0
+          git commit -m "Vergleich 2: Daten $(date -u +%Y-%m-%d_%H%M)"
+          for i in 1 2 3; do git pull --rebase && git push && break; sleep 5; done
