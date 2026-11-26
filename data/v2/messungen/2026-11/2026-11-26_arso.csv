@@ -1,3 +1,5 @@
 zeit,ort,quelle,station,intervall_min,wind,boeen,richtung,temp,taupunkt,rf,niederschlag,sonne_min,strahlung,druck,druck_meer,bewoelkung,sicht_km,wolkenbasis1,wolkenmenge1,wolkenbasis2,wolkenmenge2
 2026-11-26T00:20,arso_kanin,arso,KANIN_,30,5.0,10.0,134,-1.7,-2.1,97,0.8,,0,,,,,,,,
+2026-11-26T01:40,arso_kanin,arso,KANIN_,30,12.0,21.0,127,-2.3,-2.7,97,0.8,,0,,,,,,,,
 2026-11-26T00:20,arso_vogel,arso,VOGEL_,30,5.0,9.0,125,-0.3,-0.7,97,0.3,,0,,,,,,,,
+2026-11-26T01:40,arso_vogel,arso,VOGEL_,30,2.0,7.0,183,-0.2,-0.8,96,1.0,,0,,,,,,,,
