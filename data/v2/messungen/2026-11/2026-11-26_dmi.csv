@@ -1,0 +1,5 @@
+zeit,ort,quelle,station,intervall_min,wind,boeen,richtung,temp,taupunkt,rf,niederschlag,sonne_min,strahlung,druck,druck_meer,bewoelkung,sicht_km,wolkenbasis1,wolkenmenge1,wolkenbasis2,wolkenmenge2
+2026-11-26T00:00,dmi_hvidesande,dmi,06058,10,27.3,33.2,60.4,1.1,-0.6,88.7,0.0,0.0,0.0,1027.6,1028.2,0.8,28.6,,,,
+2026-11-26T00:10,dmi_hvidesande,dmi,06058,10,28.0,34.5,63.2,1.0,-0.8,88.0,0.0,0.0,0.0,1027.7,1028.2,0.0,29.2,,,,
+2026-11-26T00:20,dmi_hvidesande,dmi,06058,10,28.0,33.9,61.9,1.0,-0.8,87.7,0.0,0.0,0.0,1027.7,1028.2,0.0,30.4,,,,
+2026-11-26T00:30,dmi_hvidesande,dmi,06058,10,28.8,34.7,61.8,0.9,-1.1,86.8,0.0,0.0,0.0,1027.6,1028.2,0.0,27.1,,,,
