@@ -11,6 +11,7 @@ zeit,ort,quelle,station,intervall_min,wind,boeen,richtung,temp,taupunkt,rf,niede
 2026-11-26T13:40,arso_kanin,arso,KANIN_,30,18.0,26.0,193,-3.4,-4.1,95,0.2,,19,,,,,,,,
 2026-11-26T15:20,arso_kanin,arso,KANIN_,30,8.0,11.0,204,-3.7,-4.4,95,0.2,,0,,,,,,,,
 2026-11-26T17:20,arso_kanin,arso,KANIN_,30,4.0,8.0,226,-3.6,-4.3,95,0.1,,0,,,,,,,,
+2026-11-26T18:20,arso_kanin,arso,KANIN_,30,2.0,3.0,359,-3.7,-4.4,95,0.2,,0,,,,,,,,
 2026-11-26T00:20,arso_vogel,arso,VOGEL_,30,5.0,9.0,125,-0.3,-0.7,97,0.3,,0,,,,,,,,
 2026-11-26T01:40,arso_vogel,arso,VOGEL_,30,2.0,7.0,183,-0.2,-0.8,96,1.0,,0,,,,,,,,
 2026-11-26T03:20,arso_vogel,arso,VOGEL_,30,4.0,8.0,130,-0.4,-0.7,98,0.1,,0,,,,,,,,
@@ -22,3 +23,4 @@ zeit,ort,quelle,station,intervall_min,wind,boeen,richtung,temp,taupunkt,rf,niede
 2026-11-26T13:40,arso_vogel,arso,VOGEL_,30,1.0,4.0,110,-2.5,-3.3,94,0.0,,0,,,,,,,,
 2026-11-26T15:20,arso_vogel,arso,VOGEL_,30,2.0,4.0,312,-3.2,-4.0,94,0.2,,0,,,,,,,,
 2026-11-26T17:20,arso_vogel,arso,VOGEL_,30,1.0,3.0,166,-2.9,-3.6,95,0.1,,0,,,,,,,,
+2026-11-26T18:20,arso_vogel,arso,VOGEL_,30,1.0,3.0,200,-2.6,-3.3,95,0.3,,0,,,,,,,,
